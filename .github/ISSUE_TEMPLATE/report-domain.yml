@@ -1,0 +1,33 @@
+name: Report a domain
+description: A domain is blocked that shouldn't be, or one should be blocked that isn't.
+title: "Domain report: "
+body:
+  - type: input
+    id: domain
+    attributes:
+      label: Domain
+      description: Just the domain, for example ads.example.com
+      placeholder: ads.example.com
+    validations:
+      required: true
+  - type: dropdown
+    id: request
+    attributes:
+      label: What should happen?
+      options:
+        - Unblock it (it breaks something)
+        - Block it (it's an ad, tracker or malware)
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What broke, or why it should be blocked. Links to the affected site help.
+    validations:
+      required: true
+  - type: input
+    id: blocker
+    attributes:
+      label: Blocker you use (optional)
+      placeholder: Pi-hole, AdGuard Home, uBlock Origin…
