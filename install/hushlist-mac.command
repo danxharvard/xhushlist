@@ -26,8 +26,16 @@ if [ -n "$SUDO" ]; then echo "Your Mac password is needed to change system setti
 TMP=$(mktemp)
 trap 'rm -f "$TMP" "$TMP.list"' EXIT
 
-# Current hosts file without any previous Hushlist block
-$SUDO awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$HOSTS" > "$TMP"
+# Remove only complete, well-formed Hushlist blocks. Refuse to touch hosts if markers are damaged.
+if ! $SUDO awk -v b="$BEGIN" -v e="$END" '
+  $0==b { if (skip) exit 2; skip=1; next }
+  $0==e { if (!skip) exit 2; skip=0; next }
+  !skip { print }
+  END { if (skip) exit 2 }
+' "$HOSTS" > "$TMP"; then
+  echo "The hosts file contains an incomplete Hushlist block. Nothing changed."
+  exit 1
+fi
 
 if [ "$MODE" != "--uninstall" ]; then
   say "Downloading blocklist…"
