@@ -45,7 +45,7 @@ jobs:
           SITE_URL: ${{ steps.pages.outputs.base_url }}/
         run: |
           mkdir _site
-          cp index.html lists.json _site/
+          cp index.html lists.json manifest.webmanifest icon-*.png _site/
           cp -r lists install _site/
           # Point the installers at this site's address
           sed -i "s|__SITE_URL__|${SITE_URL}|g" _site/install/*
