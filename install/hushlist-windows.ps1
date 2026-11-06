@@ -5,7 +5,6 @@ param([switch]$Uninstall, [switch]$Update)
 
 $ErrorActionPreference = 'Stop'
 $ListUrl   = '__SITE_URL__lists/hushlist.txt'
-$ScriptUrl = '__SITE_URL__install/hushlist-windows.ps1'
 $Hosts     = "$env:SystemRoot\System32\drivers\etc\hosts"
 $AppDir    = "$env:ProgramData\Hushlist"
 $TaskName  = 'Hushlist hourly update'
@@ -21,10 +20,19 @@ $current = [IO.File]::ReadAllLines($Hosts)
 $keep = New-Object System.Collections.Generic.List[string]
 $skip = $false
 foreach ($line in $current) {
-  if ($line -eq $Begin) { $skip = $true; continue }
-  if ($line -eq $End)   { $skip = $false; continue }
+  if ($line -eq $Begin) {
+    if ($skip) { throw 'The hosts file contains nested Hushlist markers. Nothing changed.' }
+    $skip = $true
+    continue
+  }
+  if ($line -eq $End) {
+    if (-not $skip) { throw 'The hosts file contains an unmatched Hushlist end marker. Nothing changed.' }
+    $skip = $false
+    continue
+  }
   if (-not $skip) { $keep.Add($line) }
 }
+if ($skip) { throw 'The hosts file contains an incomplete Hushlist block. Nothing changed.' }
 
 $count = 0
 if (-not $Uninstall) {
@@ -55,7 +63,10 @@ if ($Uninstall) {
 
 # Install the hourly updater (runs as SYSTEM, hidden, also at startup)
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-(New-Object Net.WebClient).DownloadFile($ScriptUrl, "$AppDir\update.ps1")
+if (-not $PSCommandPath -or -not (Test-Path -LiteralPath $PSCommandPath)) {
+  throw 'Cannot locate the installer script to install the local updater.'
+}
+Copy-Item -LiteralPath $PSCommandPath -Destination "$AppDir\update.ps1" -Force
 $action   = New-ScheduledTaskAction -Execute 'powershell.exe' `
               -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$AppDir\update.ps1`" -Update"
 $hourly   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) `

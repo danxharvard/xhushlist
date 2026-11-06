@@ -1,13 +1,12 @@
 #!/bin/bash
 # Hushlist for macOS
-#   Install / update:  curl -fsSL __SITE_URL__install/hushlist-mac.command | bash
-#   Uninstall:         curl -fsSL __SITE_URL__install/hushlist-mac.command | bash -s -- --uninstall
+#   Install / update:  download the script to a temporary file, then run it with bash
+#   Uninstall:         download the script to a temporary file, then run it with --uninstall
 #
 # Adds the blocklist to /etc/hosts between Hushlist markers (your own entries are left alone)
 # and installs a background job that refreshes it every hour.
 
 LIST_URL="__SITE_URL__lists/hushlist.txt"
-SCRIPT_URL="__SITE_URL__install/hushlist-mac.command"
 HOSTS="${HUSHLIST_HOSTS:-/etc/hosts}"          # override only for testing
 APP_DIR="/Library/Application Support/Hushlist"
 PLIST="/Library/LaunchDaemons/com.hushlist.update.plist"
@@ -15,6 +14,7 @@ LABEL="com.hushlist.update"
 BEGIN="# >>> Hushlist BEGIN (managed, do not edit) >>>"
 END="# <<< Hushlist END <<<"
 MODE="${1:-install}"   # install | --update | --uninstall
+SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 set -e
 if [ "$(id -u)" -eq 0 ] || [ -n "$HUSHLIST_HOSTS" ]; then SUDO=""; else SUDO="sudo"; fi
@@ -26,8 +26,16 @@ if [ -n "$SUDO" ]; then echo "Your Mac password is needed to change system setti
 TMP=$(mktemp)
 trap 'rm -f "$TMP" "$TMP.list"' EXIT
 
-# Current hosts file without any previous Hushlist block
-$SUDO awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$HOSTS" > "$TMP"
+# Remove only complete, well-formed Hushlist blocks. Refuse to touch hosts if markers are damaged.
+if ! $SUDO awk -v b="$BEGIN" -v e="$END" '
+  $0==b { if (skip) exit 2; skip=1; next }
+  $0==e { if (!skip) exit 2; skip=0; next }
+  !skip { print }
+  END { if (skip) exit 2 }
+' "$HOSTS" > "$TMP"; then
+  echo "The hosts file contains an incomplete Hushlist block. Nothing changed."
+  exit 1
+fi
 
 if [ "$MODE" != "--uninstall" ]; then
   say "Downloading blocklist…"
@@ -60,7 +68,11 @@ esac
 
 # Install the hourly updater (a root launchd job)
 $SUDO mkdir -p "$APP_DIR"
-$SUDO curl -fsSL --retry 3 "$SCRIPT_URL" -o "$APP_DIR/update.sh"
+if [ ! -f "$SCRIPT_PATH" ]; then
+  echo "Cannot locate the installer script to install the local updater."
+  exit 1
+fi
+$SUDO cp "$SCRIPT_PATH" "$APP_DIR/update.sh"
 $SUDO chmod 755 "$APP_DIR/update.sh"
 $SUDO tee "$PLIST" > /dev/null <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
