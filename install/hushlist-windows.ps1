@@ -54,7 +54,10 @@ if ($Uninstall) {
 
 # Install the hourly updater (runs as SYSTEM, hidden, also at startup)
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-(New-Object Net.WebClient).DownloadFile($ScriptUrl, "$AppDir\update.ps1")
+if (-not $PSCommandPath -or -not (Test-Path -LiteralPath $PSCommandPath)) {
+  throw 'Cannot locate the installer script to install the local updater.'
+}
+Copy-Item -LiteralPath $PSCommandPath -Destination "$AppDir\update.ps1" -Force
 $action   = New-ScheduledTaskAction -Execute 'powershell.exe' `
               -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$AppDir\update.ps1`" -Update"
 $hourly   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) `
