@@ -10,6 +10,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import sync_upstream
 
 
+class DomainParsingTests(unittest.TestCase):
+    def test_accepts_valid_domains_and_hosts_entries(self):
+        self.assertEqual(sync_upstream.to_domain("example.com"), "example.com")
+        self.assertEqual(sync_upstream.to_domain("0.0.0.0 ads.example.co.uk"), "ads.example.co.uk")
+        self.assertEqual(sync_upstream.to_domain("||tracker.example.com^"), "tracker.example.com")
+
+    def test_rejects_invalid_dns_labels_and_non_domain_rules(self):
+        for value in ("_service.example.com", "bad_name.example.com", "bad-.example.com",
+                      "-bad.example.com", "example..com", "example.com/path",
+                      "@@||allowed.example^", "||example.com^$third-party"):
+            with self.subTest(value=value):
+                self.assertIsNone(sync_upstream.to_domain(value))
+
+
 class MainTests(unittest.TestCase):
     def test_returns_zero_when_all_sources_sync(self):
         sources = [{"name": "one"}, {"name": "two"}]
