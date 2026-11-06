@@ -355,15 +355,15 @@ var BLOCKERS = [
   { id: 'windows', name: 'Windows (one-click installer)', kind: 'This device', steps: [
       'Download <a href="{BASE}install/hushlist-windows.cmd" download><b>hushlist-windows.cmd</b></a>.',
       'Double-click it. If Windows shows "Windows protected your PC", click <b>More info → Run anyway</b>, then <b>Yes</b> when asked for admin access.',
-      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run <code>hushlist-windows.cmd uninstall</code> from a Command Prompt.'
+      'Wait for <b>Done</b>. Hushlist now checks for list updates every hour. To update the installer itself later, run the downloaded installer again. To remove it, run <code>hushlist-windows.cmd uninstall</code> from a Command Prompt.'
     ],
     note: 'This adds the list to your Windows hosts file (keeping a backup) and creates a hidden scheduled task called <b>Hushlist hourly update</b>. Very large hosts files can make the first web page of a session load a bit slower. If you notice that, a DNS blocker such as AdGuard Home works better.' },
   { id: 'mac', name: 'Mac (one-line installer)', kind: 'This device', steps: [
       'Open <b>Terminal</b> (press <b>Cmd + Space</b>, type Terminal, press Return).',
       'Paste this line and press Return, then enter your Mac password when asked:',
-      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run the same line with <code>-s -- --uninstall</code> added after <code>bash</code>.'
+      'Wait for <b>Done</b>. Hushlist now checks for list updates every hour. To update the installer itself later, run this command again. To remove it, add <code>--uninstall</code> after <code>bash "$tmp"</code> in the command.'
     ],
-    snippet: 'curl -fsSL {BASE}install/hushlist-mac.command | bash',
+    snippet: 'tmp="$(mktemp)" && curl -fsSL {BASE}install/hushlist-mac.command -o "$tmp" && bash "$tmp"; status=$?; rm -f "$tmp"; exit "$status"',
     snippetAfter: 1,
     note: 'This adds the list to <code>/etc/hosts</code> (backup at <code>/etc/hosts.hushlist-backup</code>) and installs a small background job that refreshes it hourly. You can also <a href="{BASE}install/hushlist-mac.command" download>download the script</a> to read it first.' },
   { id: 'iphone', name: 'iPhone / iPad', kind: 'This device', steps: [
