@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hushlist</title>
+<meta name="description" content="Free DNS blocklists with setup guides for Pi-hole, AdGuard Home, uBlock Origin and more.">
+<script>
+  try { var t = localStorage.getItem('hushlist-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --text: #1c1d1f;
+    --muted: #63676e;
+    --border: #e0e0dc;
+    --accent: #0f766e;
+    --accent-soft: #e6f4f2;
+    --accent-text: #ffffff;
+    --code-bg: #f1f1ee;
+    --ok: #15803d;
+  }
+  :root { color-scheme: light; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111315;
+      --card: #191c1f;
+      --text: #e7e8ea;
+      --muted: #9a9fa7;
+      --border: #2b3035;
+      --accent: #2dd4bf;
+      --accent-soft: #12302d;
+      --accent-text: #06201d;
+      --code-bg: #0c0e10;
+      --ok: #4ade80;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111315;
+    --card: #191c1f;
+    --text: #e7e8ea;
+    --muted: #9a9fa7;
+    --border: #2b3035;
+    --accent: #2dd4bf;
+    --accent-soft: #12302d;
+    --accent-text: #06201d;
+    --code-bg: #0c0e10;
+    --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 16px; }
+
+  /* Top bar */
+  nav.top { background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+  nav.top .wrap { display: flex; align-items: center; gap: 4px; min-height: 56px; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; margin-right: auto; padding: 8px 0; }
+  nav.top a.nav { color: var(--muted); text-decoration: none; padding: 8px 10px; border-radius: 6px; font-size: 0.93rem; }
+  nav.top a.nav:hover { color: var(--text); background: var(--code-bg); }
+
+  .theme-btn { margin-left: 4px; padding: 6px 10px; font-size: 0.88rem; color: var(--muted); }
+  .theme-btn:hover { color: var(--text); }
+  .theme-btn svg { width: 16px; height: 16px; margin-right: 6px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Hero / picker */
+  .hero { padding: 48px 0 8px; }
+  .hero h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: -0.02em; line-height: 1.2; }
+  .hero p { margin: 0 0 24px; color: var(--muted); max-width: 60ch; }
+  .picker label { display: block; font-weight: 600; margin-bottom: 8px; }
+  .picker select {
+    width: 100%; max-width: 440px; font: inherit; font-size: 1.05rem;
+    padding: 12px 40px 12px 14px; border-radius: 10px;
+    border: 2px solid var(--accent); background: var(--card); color: var(--text);
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+    background-position: calc(100% - 20px) 52%, calc(100% - 14px) 52%;
+    background-size: 6px 6px; background-repeat: no-repeat;
+  }
+  .picker select:focus { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+
+  /* Guide */
+  #guide { margin: 24px 0 8px; }
+  .guide-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; }
+  .guide-card h2 { margin: 0 0 4px; font-size: 1.25rem; }
+  .guide-card .sub { color: var(--muted); margin: 0 0 16px; font-size: 0.95rem; }
+  .guide-card ol { margin: 0; padding-left: 22px; }
+  .guide-card ol > li { margin-bottom: 12px; padding-left: 4px; }
+  .note { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; margin-top: 14px; font-size: 0.93rem; }
+  pre.snippet {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; margin: 8px 0 0;
+    font: 0.84rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .urls { display: grid; gap: 8px; margin-top: 8px; }
+  .url-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+  .url-row .label { flex: 0 0 100%; font-size: 0.85rem; color: var(--muted); margin-bottom: -4px; }
+  .url {
+    flex: 1 1 240px; min-width: 0; display: block;
+    font: 0.84rem ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 10px; overflow-x: auto; white-space: nowrap;
+  }
+  button, .btn {
+    font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.copied { color: var(--ok); border-color: var(--ok); background: var(--card); }
+
+  /* Sections */
+  section.block { padding: 36px 0 8px; border-top: 1px solid var(--border); margin-top: 36px; }
+  section.block h2 { font-size: 1.3rem; margin: 0 0 12px; }
+  .lists { display: grid; gap: 12px; }
+  .list-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .list-card h3 { margin: 0 0 2px; font-size: 1.05rem; }
+  .list-card p { margin: 0 0 10px; color: var(--muted); }
+  .meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.86rem; color: var(--muted); }
+  .meta b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .meta a { margin-left: auto; }
+  details { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 10px 0 2px; color: var(--muted); }
+  .muted { color: var(--muted); }
+  footer { color: var(--muted); font-size: 0.88rem; padding: 32px 0 48px; margin-top: 36px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="brand" href="#" id="brand">Hushlist</a>
+    <a class="nav" href="#setup">Setup</a>
+    <a class="nav" href="#lists">Lists</a>
+    <a class="nav" href="#" id="report-link">Report a domain</a>
+    <a class="nav" href="#faq">FAQ</a>
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Change colour theme"></button>
+  </div>
+</nav>
+
+<div class="wrap">
+  <section class="hero" id="setup">
+    <h1 id="headline">Block ads and trackers for every device on your network</h1>
+    <p id="tagline">Pick the blocker you use, then follow the steps. Your list links are filled in for you.</p>
+    <div class="picker">
+      <label for="blocker">What do you want to set up?</label>
+      <select id="blocker"><option value="">Choose your device or blocker…</option></select>
+    </div>
+  </section>
+
+  <div id="guide" aria-live="polite"></div>
+
+  <section class="block" id="lists">
+    <h2>Our lists</h2>
+    <p class="muted" id="list-summary">Loading…</p>
+    <div class="lists" id="list-cards"></div>
+  </section>
+
+  <section class="block" id="faq">
+    <h2>FAQ</h2>
+    <!-- EDIT ME: add, remove or reword questions here. -->
+    <details>
+      <summary>Which list should I use?</summary>
+      <p>Start with the main list. Add others only if you need what they block. Using lists that overlap won't break anything, but it doesn't help either.</p>
+    </details>
+    <details>
+      <summary>A site I need stopped working. What now?</summary>
+      <p>Allowlist the domain in your blocker for a quick fix, then report it using the "Report a domain" link so it can be removed from the list for everyone.</p>
+    </details>
+    <details>
+      <summary>How often are the lists updated?</summary>
+      <p>Whenever changes are made. Most blockers check for updates on their own, usually once a day or once a week.</p>
+    </details>
+    <details>
+      <summary>Does this cost anything?</summary>
+      <p>No. The lists are free to use.</p>
+    </details>
+  </section>
+
+  <footer id="footer">Free to use. Made with care.</footer>
+</div>
+
+<script>
+/* ===========================================================
+   SITE SETTINGS: edit these to make the site your own.
+   =========================================================== */
+var SITE = {
+  name: 'Hushlist',
+  headline: 'Quiet the noise. Block ads, trackers and malware.',
+  tagline: 'Pick your device or ad blocker, then follow the steps. Your list links are filled in for you.',
+  footer: 'Hushlist is free to use. Licence details are included at the top of each list file.',
+  // Where "Report a domain" goes. Leave empty to use the GitHub repo's Issues page.
+  reportUrl: 'https://github.com/danxharvard/hushlist/issues/new'
+};
+
+/* ===========================================================
+   SETUP GUIDES: one entry per blocker in the dropdown.
+   - steps: each step is text (simple HTML allowed).
+     Put {URLS} in a step to show copyable list links there.
+   - snippet: optional config/code block; {URLS_RAW} becomes one
+     URL per line and {URLS_YAML} becomes YAML list items.
+   - note: optional tip shown under the steps.
+   =========================================================== */
+var BLOCKERS = [
+  { id: 'windows', name: 'Windows (one-click installer)', kind: 'This device', steps: [
+      'Download <a href="{BASE}install/hushlist-windows.cmd" download><b>hushlist-windows.cmd</b></a>.',
+      'Double-click it. If Windows shows "Windows protected your PC", click <b>More info → Run anyway</b>, then <b>Yes</b> when asked for admin access.',
+      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run <code>hushlist-windows.cmd uninstall</code> from a Command Prompt.'
+    ],
+    note: 'This adds the list to your Windows hosts file (keeping a backup) and creates a hidden scheduled task called <b>Hushlist hourly update</b>. Very large hosts files can make the first web page of a session load a bit slower. If you notice that, a DNS blocker such as AdGuard Home works better.' },
+  { id: 'mac', name: 'Mac (one-line installer)', kind: 'This device', steps: [
+      'Open <b>Terminal</b> (press <b>Cmd + Space</b>, type Terminal, press Return).',
+      'Paste this line and press Return, then enter your Mac password when asked:',
+      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run the same line with <code>-s -- --uninstall</code> added after <code>bash</code>.'
+    ],
+    snippet: 'curl -fsSL {BASE}install/hushlist-mac.command | bash',
+    snippetAfter: 1,
+    note: 'This adds the list to <code>/etc/hosts</code> (backup at <code>/etc/hosts.hushlist-backup</code>) and installs a small background job that refreshes it hourly. You can also <a href="{BASE}install/hushlist-mac.command" download>download the script</a> to read it first.' },
+  { id: 'iphone', name: 'iPhone / iPad', kind: 'This device', steps: [
+      'iPhones don\'t allow blocklist files to be installed directly, so you need an app that does the blocking.',
+      'Install <b>AdGuard</b> from the App Store and open <b>Protection → Safari protection → Filters → Custom</b>.',
+      'Tap <b>Add a filter</b>, paste the address below and confirm. {URLS}'
+    ],
+    note: 'This blocks ads in Safari. To block across all apps, use AdGuard\'s DNS protection, or point your iPhone at a home DNS blocker (Pi-hole / AdGuard Home) set up with this list.' },
+  { id: 'pihole', name: 'Pi-hole', kind: 'DNS server', steps: [
+      'Open the Pi-hole admin page and go to <b>Lists</b> (called <b>Adlists</b> in Pi-hole v5).',
+      'Paste a list address into the <b>Address</b> field, add an optional comment, and click <b>Add blocklist</b>. Repeat for each list you want. {URLS}',
+      'Go to <b>Tools → Update Gravity</b> and click <b>Update</b>, or run <code>pihole -g</code> on the device.'
+    ],
+    note: '<b>Get updates faster:</b> Pi-hole only refreshes lists once a week by default. To refresh hourly, run <code>sudo crontab -e</code> and add: <code>0 * * * * pihole -g &gt;/dev/null</code>' },
+  { id: 'adguardhome', name: 'AdGuard Home', kind: 'DNS server', steps: [
+      'Open AdGuard Home and go to <b>Filters → DNS blocklists</b>.',
+      'Click <b>Add blocklist → Add a custom list</b>.',
+      'Enter a name, paste the list address, and click <b>Save</b>. {URLS}',
+      'For the fastest updates, go to <b>Settings → General settings</b> and set <b>Filters update interval</b> to <b>1 hour</b>.'
+    ] },
+  { id: 'technitium', name: 'Technitium DNS Server', kind: 'DNS server', steps: [
+      'Open the web console and go to <b>Settings → Blocking</b>.',
+      'Make sure <b>Enable Blocking</b> is ticked.',
+      'Paste each list address on its own line in <b>Allow / Block List URLs</b>. {URLS}',
+      'Set <b>Block List URL Update Interval</b> to <b>1</b> hour, then click <b>Save Settings</b> and <b>Update Now</b>.'
+    ] },
+  { id: 'blocky', name: 'Blocky', kind: 'DNS server', steps: [
+      'Add the lists to your Blocky <code>config.yml</code> under <code>blocking</code>:',
+      'Restart Blocky. It refreshes the lists automatically after that.'
+    ],
+    snippet: 'blocking:\n  denylists:\n    myblocklists:\n{URLS_YAML}\n  clientGroupsBlock:\n    default:\n      - myblocklists',
+    note: 'Older Blocky versions call this section <code>blackLists</code> instead of <code>denylists</code>.' },
+  { id: 'pfblockerng', name: 'pfSense (pfBlockerNG)', kind: 'Router / firewall', steps: [
+      'Go to <b>Firewall → pfBlockerNG → DNSBL → DNSBL Groups</b> and click <b>Add</b>.',
+      'Give the group a name, set <b>Action</b> to <b>Unbound</b>.',
+      'Under <b>DNSBL Source Definitions</b>, add one row per list, set to <b>Auto</b> and <b>ON</b>, with the address in the <b>Source</b> field. {URLS}',
+      'Click <b>Save</b>, then run <b>Update → Force → Reload → All</b>.'
+    ] },
+  { id: 'opnsense', name: 'OPNsense', kind: 'Router / firewall', steps: [
+      'Go to <b>Services → Unbound DNS → Blocklist</b> and tick <b>Enable</b>.',
+      'Paste the list addresses into <b>URLs of Blocklists</b>, separated by commas. {URLS}',
+      'Click <b>Apply</b>.'
+    ] },
+  { id: 'unifi', name: 'UniFi', kind: 'Router / firewall', steps: [
+      'UniFi gateways don\'t accept custom blocklist addresses yet. Run Pi-hole or AdGuard Home on your network and point UniFi\'s DNS at it instead.',
+      'Then pick <b>Pi-hole</b> or <b>AdGuard Home</b> from the dropdown above for the list steps.'
+    ] },
+  { id: 'dnsmasq', name: 'dnsmasq', kind: 'DNS server', steps: [
+      'dnsmasq can\'t download lists itself. This script turns the lists into a dnsmasq config file:',
+      'Restart dnsmasq. Run the script on a schedule (for example with cron) to stay up to date.'
+    ],
+    snippet: '#!/bin/sh\nOUT=/etc/dnsmasq.d/blocklist.conf\nfor url in \\\n{URLS_SH}\ndo curl -fsSL "$url"; done \\\n  | sed -E \'s/#.*//; s/^(0\\.0\\.0\\.0|127\\.0\\.0\\.1)[[:space:]]+//; s/[[:space:]]+$//\' \\\n  | grep -E \'^[A-Za-z0-9._-]+\\.[A-Za-z]+$\' | sort -u \\\n  | sed \'s|.*|address=/&/0.0.0.0|\' > "$OUT"' },
+  { id: 'unbound', name: 'Unbound', kind: 'DNS server', steps: [
+      'Unbound can\'t download lists itself. This script turns the lists into an Unbound config file:',
+      'Add <code>include: /etc/unbound/blocklist.conf</code> to <code>unbound.conf</code> and reload Unbound. Run the script on a schedule to stay up to date.'
+    ],
+    snippet: '#!/bin/sh\nOUT=/etc/unbound/blocklist.conf\nfor url in \\\n{URLS_SH}\ndo curl -fsSL "$url"; done \\\n  | sed -E \'s/#.*//; s/^(0\\.0\\.0\\.0|127\\.0\\.0\\.1)[[:space:]]+//; s/[[:space:]]+$//\' \\\n  | grep -E \'^[A-Za-z0-9._-]+\\.[A-Za-z]+$\' | sort -u \\\n  | sed \'s|.*|local-zone: "&" always_nxdomain|\' > "$OUT"' },
+  { id: 'ublock', name: 'uBlock Origin', kind: 'Browser extension', steps: [
+      'Click the uBlock Origin icon, then the <b>gear</b> to open the dashboard.',
+      'Open the <b>Filter lists</b> tab and scroll to the bottom.',
+      'Tick <b>Import…</b> under <b>Custom</b> and paste the list addresses, one per line. {URLS}',
+      'Click <b>Apply changes</b> at the top.'
+    ] },
+  { id: 'adguardext', name: 'AdGuard (browser extension)', kind: 'Browser extension', steps: [
+      'Open the AdGuard extension\'s <b>Settings → Filters → Custom</b>.',
+      'Click <b>Add custom filter</b>, paste a list address and click <b>Next</b>. {URLS}',
+      'Tick <b>Trusted</b> if offered, then click <b>Subscribe</b>.'
+    ] },
+  { id: 'adguardapps', name: 'AdGuard for Windows / Mac / Android / iOS', kind: 'App', steps: [
+      'Open AdGuard and go to <b>Filters → Custom</b> (on iOS: <b>Protection → Safari protection → Filters → Custom</b>).',
+      'Tap <b>Add custom filter</b> and paste a list address. {URLS}',
+      'Confirm to subscribe.'
+    ] },
+  { id: 'adaway', name: 'AdAway (Android)', kind: 'App', steps: [
+      'Open AdAway and tap <b>Sources</b>.',
+      'Tap <b>+</b>, give it a label, paste a list address and save. {URLS}',
+      'Go back and tap the <b>refresh</b> button to apply.'
+    ] },
+  { id: 'dns66', name: 'DNS66 / personalDNSfilter (Android)', kind: 'App', steps: [
+      '<b>DNS66:</b> open the <b>Domain filters</b> tab, tap <b>+</b>, paste a list address and choose <b>Deny</b>.',
+      '<b>personalDNSfilter:</b> open <b>Advanced settings → Filter configuration</b>, add a new row with a name and the list address, and tick it.',
+      'Your list addresses: {URLS}'
+    ] },
+  { id: 'littlesnitch', name: 'Little Snitch (Mac)', kind: 'App', steps: [
+      'Open Little Snitch and choose <b>File → New Blocklist…</b> (or <b>Rule Groups → Subscribe</b> in older versions).',
+      'Paste a list address and click <b>Subscribe</b>. {URLS}'
+    ] },
+  { id: 'hosts', name: 'Hosts file (no blocker installed)', kind: 'Manual', steps: [
+      'Download a list using the <b>Download</b> buttons in the lists section below.',
+      'Add its lines to your hosts file: <code>/etc/hosts</code> on Mac and Linux, or <code>C:\\Windows\\System32\\drivers\\etc\\hosts</code> on Windows (edit as admin).'
+    ],
+    note: 'Hosts files don\'t update themselves, and plain domain lines (without <code>0.0.0.0</code> in front) won\'t work there. A real blocker is much easier.' },
+  { id: 'other', name: 'My blocker isn\'t listed', kind: '', steps: [
+      'Most blockers have a setting called something like <b>blocklists</b>, <b>filter lists</b>, <b>adlists</b> or <b>subscriptions</b>. Paste the list address there. {URLS}',
+      'Still stuck? Use <b>Report a domain</b> at the top to ask for a guide for your blocker.'
+    ] }
+];
+
+/* Theme switcher: Auto (follows device) -> Light -> Dark */
+(function () {
+  var btn = document.getElementById('theme-btn');
+  var root = document.documentElement;
+  var icons = {
+    auto:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>',
+    light: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    dark:  '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
+  };
+  var labels = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+  var order = ['auto', 'light', 'dark'];
+  function current() { return root.getAttribute('data-theme') || 'auto'; }
+  function show() {
+    var t = current();
+    btn.innerHTML = icons[t] + labels[t];
+    btn.title = 'Theme: ' + labels[t] + ' (click to change)';
+  }
+  btn.addEventListener('click', function () {
+    var next = order[(order.indexOf(current()) + 1) % order.length];
+    if (next === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', next);
+    try { if (next === 'auto') localStorage.removeItem('hushlist-theme'); else localStorage.setItem('hushlist-theme', next); } catch (e) {}
+    show();
+  });
+  show();
+})();
+
+/* ===========================================================
+   Nothing below needs editing.
+   =========================================================== */
+(function () {
+  var base = new URL('.', location.href).href;
+  var lists = [];
+  var select = document.getElementById('blocker');
+  var guide = document.getElementById('guide');
+
+  // Apply site settings
+  document.title = SITE.name;
+  document.getElementById('brand').textContent = SITE.name;
+  document.getElementById('headline').textContent = SITE.headline;
+  document.getElementById('tagline').textContent = SITE.tagline;
+  document.getElementById('footer').textContent = SITE.footer;
+  var report = document.getElementById('report-link');
+  var gh = location.hostname.match(/^([^.]+)\.github\.io$/);
+  if (SITE.reportUrl) report.href = SITE.reportUrl;
+  else if (gh) report.href = 'https://github.com/' + gh[1] + '/' + (location.pathname.split('/').filter(Boolean)[0] || gh[0]) + '/issues/new';
+  else report.remove();
+
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function fmtNum(n) { return n.toLocaleString(); }
+  function fmtSize(b) { return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+  function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'; }
+  function urlOf(l) { return base + l.path; }
+
+  function copyBtn(text, label) {
+    var btn = el('button', { class: 'primary', type: 'button' }, label || 'Copy');
+    btn.addEventListener('click', function () {
+      var done = function () {
+        btn.textContent = 'Copied'; btn.classList.add('copied');
+        setTimeout(function () { btn.textContent = label || 'Copy'; btn.classList.remove('copied'); }, 1500);
+      };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+      else fallback();
+      function fallback() {
+        var ta = el('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {} ta.remove();
+      }
+    });
+    return btn;
+  }
+
+  function urlBlock() {
+    var wrap = el('div', { class: 'urls' });
+    if (!lists.length) { wrap.appendChild(el('span', { class: 'muted' }, 'No lists published yet.')); return wrap; }
+    lists.forEach(function (l) {
+      var row = el('div', { class: 'url-row' });
+      if (lists.length > 1) row.appendChild(el('span', { class: 'label' }, l.title));
+      row.appendChild(el('code', { class: 'url' }, urlOf(l)));
+      row.appendChild(copyBtn(urlOf(l)));
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  function fillSnippet(s) {
+    var urls = lists.map(urlOf);
+    return s
+      .split('{BASE}').join(base)
+      .replace('{URLS_RAW}', urls.join('\n'))
+      .replace('{URLS_YAML}', urls.map(function (u) { return '      - ' + u; }).join('\n'))
+      .replace('{URLS_SH}', urls.map(function (u) { return '  "' + u + '" \\'; }).join('\n'));
+  }
+
+  function showGuide(id) {
+    guide.innerHTML = '';
+    var b = BLOCKERS.filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    var card = el('div', { class: 'guide-card' });
+    card.appendChild(el('h2', null, 'Set up ' + b.name));
+    if (b.kind) card.appendChild(el('p', { class: 'sub' }, b.kind));
+    var ol = el('ol');
+    b.steps.forEach(function (step, i) {
+      var li = el('li');
+      var parts = step.split('{BASE}').join(base).split('{URLS}');
+      var span = el('span'); span.innerHTML = parts[0]; li.appendChild(span);
+      if (parts.length > 1) {
+        li.appendChild(urlBlock());
+        if (parts[1].trim()) { var after = el('span'); after.innerHTML = parts[1]; li.appendChild(after); }
+      }
+      // Put the snippet after the first step for config-based blockers.
+      if (b.snippet && i === (b.snippetAfter || 0)) {
+        var code = fillSnippet(b.snippet);
+        li.appendChild(el('pre', { class: 'snippet' }, code));
+        var c = copyBtn(code, 'Copy code'); c.style.marginTop = '8px'; li.appendChild(c);
+      }
+      ol.appendChild(li);
+    });
+    card.appendChild(ol);
+    if (b.note) { var n = el('div', { class: 'note' }); n.innerHTML = b.note.split('{BASE}').join(base); card.appendChild(n); }
+    guide.appendChild(card);
+  }
+
+  function renderLists() {
+    var total = lists.reduce(function (s, l) { return s + l.entries; }, 0);
+    document.getElementById('list-summary').textContent = lists.length
+      ? lists.length + (lists.length === 1 ? ' list' : ' lists') + ', ' + fmtNum(total) + ' domains in total.'
+      : 'No lists published yet.';
+    var wrap = document.getElementById('list-cards');
+    wrap.innerHTML = '';
+    lists.forEach(function (l) {
+      var card = el('article', { class: 'list-card' });
+      card.appendChild(el('h3', null, l.title));
+      if (l.description) card.appendChild(el('p', null, l.description));
+      var meta = el('div', { class: 'meta' });
+      [['Domains', fmtNum(l.entries)], ['Size', fmtSize(l.size)], ['Updated', fmtDate(l.updated)]].forEach(function (p) {
+        var s = el('span', null, p[0] + ': '); s.appendChild(el('b', null, p[1])); meta.appendChild(s);
+      });
+      meta.appendChild(el('a', { href: l.path, download: '' }, 'Download'));
+      card.appendChild(meta);
+      wrap.appendChild(card);
+    });
+  }
+
+  // Build dropdown, grouped by kind
+  var groups = {};
+  BLOCKERS.forEach(function (b) {
+    var k = b.kind || 'Other';
+    if (!groups[k]) { groups[k] = el('optgroup', { label: k }); }
+    groups[k].appendChild(el('option', { value: b.id }, b.name));
+  });
+  if (groups['This device']) select.appendChild(groups['This device']);
+  Object.keys(groups).forEach(function (k) { if (['This device', 'Other', 'Manual'].indexOf(k) === -1) select.appendChild(groups[k]); });
+  ['Manual', 'Other'].forEach(function (k) { if (groups[k]) select.appendChild(groups[k]); });
+
+  // Remember choice in the URL (#pihole) so guides can be shared
+  select.addEventListener('change', function () {
+    history.replaceState(null, '', select.value ? '#' + select.value : location.pathname);
+    showGuide(select.value);
+  });
+  function fromHash() {
+    var id = location.hash.slice(1);
+    if (BLOCKERS.some(function (b) { return b.id === id; })) { select.value = id; showGuide(id); }
+  }
+
+  fetch('lists.json', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (data) { lists = data.lists || []; })
+    .catch(function () { document.getElementById('list-summary').textContent = 'Could not load lists.json. If previewing locally, run scripts/build_manifest.py first.'; })
+    .then(function () { renderLists(); fromHash(); if (select.value) showGuide(select.value); });
+  window.addEventListener('hashchange', fromHash);
+})();
+</script>
+</body>
+</html>

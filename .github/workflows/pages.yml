@@ -1,0 +1,77 @@
+name: Publish site
+
+on:
+  push:
+    branches: [main]          # editing sources.ini or a list publishes within ~1 minute
+  schedule:
+    - cron: "*/15 * * * *"    # check upstream lists every 15 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so "Updated" dates are accurate
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Sync upstream lists (sources.ini)
+        run: python scripts/sync_upstream.py
+
+      - name: Build lists.json
+        run: python scripts/build_manifest.py
+
+      - name: Assemble site
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: |
+          mkdir _site
+          cp index.html lists.json _site/
+          cp -r lists install _site/
+          # Point the installers at this site's address
+          sed -i "s|__SITE_URL__|${SITE_URL}|g" _site/install/*
+          touch _site/.nojekyll
+          # Fingerprint of the content (ignoring timestamps) to detect real changes
+          (cd _site && find lists install index.html -type f | sort | xargs cat \
+            | grep -v '^# Converted:' | sha256sum | cut -d' ' -f1) > _site/fingerprint.txt
+
+      - name: Skip if nothing changed
+        id: check
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: |
+          live=$(curl -fsSL "${SITE_URL}fingerprint.txt?t=$(date +%s)" 2>/dev/null || true)
+          new=$(cat _site/fingerprint.txt)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$live" = "$new" ]; then
+            echo "No upstream changes; skipping deploy."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4
