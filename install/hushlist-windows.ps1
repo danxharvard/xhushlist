@@ -20,10 +20,19 @@ $current = [IO.File]::ReadAllLines($Hosts)
 $keep = New-Object System.Collections.Generic.List[string]
 $skip = $false
 foreach ($line in $current) {
-  if ($line -eq $Begin) { $skip = $true; continue }
-  if ($line -eq $End)   { $skip = $false; continue }
+  if ($line -eq $Begin) {
+    if ($skip) { throw 'The hosts file contains nested Hushlist markers. Nothing changed.' }
+    $skip = $true
+    continue
+  }
+  if ($line -eq $End) {
+    if (-not $skip) { throw 'The hosts file contains an unmatched Hushlist end marker. Nothing changed.' }
+    $skip = $false
+    continue
+  }
   if (-not $skip) { $keep.Add($line) }
 }
+if ($skip) { throw 'The hosts file contains an incomplete Hushlist block. Nothing changed.' }
 
 $count = 0
 if (-not $Uninstall) {
