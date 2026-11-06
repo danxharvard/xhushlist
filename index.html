@@ -175,6 +175,21 @@
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
   }
 
+  /* Recommended for this device */
+  .rec { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 28px; margin-bottom: 44px;
+         background: var(--card); border: 1px solid var(--line-soft); border-radius: 22px; padding: 40px 44px; }
+  .rec .dev { width: 60px; height: 60px; border-radius: 16px; background: var(--inset); color: var(--text); display: grid; place-items: center; }
+  .rec .dev svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .rec .kind { margin: 0 0 6px; color: var(--text-2); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .rec h3 { margin: 0; font-size: 28px; line-height: 1.14; font-weight: 700; letter-spacing: -0.035em; }
+  .rec .blurb { margin: 10px 0 0; max-width: 36em; color: var(--text-2); }
+  .rec .cmd { margin-top: 24px; }
+  .rec-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin-top: 24px; }
+  .rec .fine { margin: 18px 0 0; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+  .linkish { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-size: 17px; cursor: pointer; letter-spacing: -0.02em; }
+  .linkish:hover { text-decoration: underline; }
+  .pick-label { margin: 0 0 12px; color: var(--text-2); font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+
   /* Guide */
   #guide { margin-top: 28px; }
   #guide:empty { display: none; }
@@ -277,6 +292,12 @@
     .select { max-width: none; }
 
     .guide, .tile { border-radius: 18px; padding: 28px 20px; }
+    .rec { grid-template-columns: 1fr; border-radius: 18px; padding: 28px 20px; margin-bottom: 36px; }
+    .rec .dev { width: 52px; height: 52px; border-radius: 14px; margin-bottom: 18px; }
+    .rec h3 { font-size: 24px; }
+    .rec-actions .btn { flex: 1 1 100%; min-height: 50px; }
+    .rec-actions .linkish { flex: 1 1 100%; text-align: center; padding: 6px 0; }
+    .rec .cmd .btn { min-height: 44px; }
     .guide h3, .tile h3 { font-size: 24px; }
     .guide h3 { margin-bottom: 26px; }
     .steps > li { padding-left: 44px; }
@@ -328,7 +349,7 @@
       <h1 id="headline">Quiet the noise.</h1>
       <p class="lede" id="tagline"></p>
       <div class="actions">
-        <a class="btn btn-primary" href="#setup">Set up a device</a>
+        <a class="btn btn-primary" href="#setup" id="hero-cta">Set up a device</a>
         <button class="btn btn-secondary" id="hero-copy" type="button" hidden><span>Copy list link</span></button>
       </div>
       <div class="stats">
@@ -345,6 +366,8 @@
         <h2>Set up in minutes.</h2>
         <p>Choose your device or blocker. Your list link is filled in for you.</p>
       </header>
+      <div id="rec" hidden></div>
+      <p class="pick-label" id="pick-label" hidden>Or choose another device or blocker</p>
       <label class="select"><select id="blocker" aria-label="Choose your device or blocker"><option value="">Choose your device or blocker</option></select></label>
       <div id="guide" aria-live="polite"></div>
     </div>
@@ -727,6 +750,113 @@ var BLOCKERS = [
     if (lists.length) copyText(urlOf(lists[0]), heroCopy, heroCopy.querySelector('span'));
   });
 
+  /* -------- Recommended install for the visitor's device -------- */
+  var ICONS = {
+    laptop: '<svg viewBox="0 0 32 32"><rect x="6" y="7" width="20" height="13" rx="1.5"/><path d="M3 24h26l-1.5 1.5h-23z"/></svg>',
+    desktop: '<svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="16" rx="1.5"/><path d="M12 27h8M16 21v6"/></svg>',
+    phone: '<svg viewBox="0 0 32 32"><rect x="9" y="3" width="14" height="26" rx="3"/><path d="M14 6.5h4"/></svg>',
+    tablet: '<svg viewBox="0 0 32 32"><rect x="6" y="3" width="20" height="26" rx="2.5"/><path d="M15 25.5h2"/></svg>'
+  };
+  // EDIT ME: what each detected device is offered. "guide" is a BLOCKERS id.
+  var RECOMMEND = {
+    mac: { device: 'Mac', icon: 'laptop', guide: 'mac', title: 'Install Hushlist on your Mac',
+      blurb: 'One command in Terminal. Hushlist then blocks in every app and browser, and keeps itself up to date.',
+      command: 'curl -fsSL {BASE}install/hushlist-mac.command | bash',
+      fine: 'Open Terminal (Cmd + Space, type Terminal), paste the command and press Return. You’ll be asked for your Mac password.' },
+    windows: { device: 'Windows PC', icon: 'desktop', guide: 'windows', title: 'Install Hushlist on Windows',
+      blurb: 'A one-click installer. Hushlist then blocks in every app and browser, and keeps itself up to date.',
+      download: { href: '{BASE}install/hushlist-windows.cmd', label: 'Download installer' },
+      fine: 'Open the downloaded file and allow it to make changes. If Windows shows a warning, choose More info, then Run anyway.' },
+    iphone: { device: 'iPhone', icon: 'phone', guide: 'iphone', title: 'Block ads on your iPhone',
+      blurb: 'iPhone doesn’t allow blocklists to be installed directly, so Hushlist works through the free AdGuard app.',
+      link: { href: 'https://adguard.com/en/adguard-ios/overview.html', label: 'Get AdGuard' }, copy: true,
+      fine: 'Then, in AdGuard, go to Protection → Safari protection → Filters → Custom and add your Hushlist link.' },
+    ipad: { device: 'iPad', icon: 'tablet', guide: 'iphone', title: 'Block ads on your iPad',
+      blurb: 'iPad doesn’t allow blocklists to be installed directly, so Hushlist works through the free AdGuard app.',
+      link: { href: 'https://adguard.com/en/adguard-ios/overview.html', label: 'Get AdGuard' }, copy: true,
+      fine: 'Then, in AdGuard, go to Protection → Safari protection → Filters → Custom and add your Hushlist link.' },
+    android: { device: 'Android device', icon: 'phone', guide: 'adaway', title: 'Block ads on Android',
+      blurb: 'Use AdAway, a free, open-source blocker that blocks in every app using your Hushlist link.',
+      link: { href: 'https://adaway.org/', label: 'Get AdAway' }, copy: true,
+      fine: 'In AdAway, tap Sources, then +, paste your Hushlist link and save.' },
+    chromeos: { device: 'Chromebook', icon: 'laptop', guide: 'adguardext', title: 'Block ads on your Chromebook',
+      blurb: 'Add Hushlist to the free AdGuard browser extension.',
+      link: { href: 'https://adguard.com/en/adguard-browser-extension/overview.html', label: 'Get AdGuard for Chrome' }, copy: true,
+      fine: 'Then open AdGuard’s Settings → Filters → Custom and add your Hushlist link.' },
+    linux: { device: 'Linux computer', icon: 'desktop', guide: 'hosts', title: 'Use Hushlist on Linux',
+      blurb: 'Add the list to your hosts file, or to a network blocker such as Pi-hole or AdGuard Home to cover every device at home.',
+      copy: true }
+  };
+
+  function detectDevice() {
+    var forced = new URLSearchParams(location.search).get('device');   // for testing: ?device=windows
+    if (forced) return RECOMMEND[forced] ? forced : '';
+    var ua = navigator.userAgent || '';
+    var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+    if (/iPhone|iPod/.test(ua)) return 'iphone';
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ipad';
+    if (/Android/i.test(ua)) return 'android';
+    if (/CrOS/.test(ua) || /Chrome OS/i.test(plat)) return 'chromeos';
+    if (/^Win/i.test(plat) || /Windows/.test(ua)) return 'windows';
+    if (/^Mac/i.test(plat) || /Macintosh/.test(ua)) return 'mac';
+    if (/Linux/i.test(plat) || /Linux/.test(ua)) return 'linux';
+    return '';
+  }
+  var deviceId = detectDevice();
+  var rec = RECOMMEND[deviceId];
+
+  function openGuide(id) {
+    select.value = id;
+    history.replaceState(null, '', '#' + id);
+    showGuide(id);
+    guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Hero button names the device straight away
+  if (rec) document.getElementById('hero-cta').textContent = (rec.download || rec.command ? 'Install on your ' : 'Set up your ') + rec.device;
+
+  function renderRec() {
+    var box = document.getElementById('rec');
+    if (!rec) return;
+    box.innerHTML = '';
+    box.className = 'rec';
+    var icon = el('div', { class: 'dev', 'aria-hidden': 'true' }); icon.innerHTML = ICONS[rec.icon];
+    box.appendChild(icon);
+    var body = el('div');
+    body.appendChild(el('p', { class: 'kind' }, 'Recommended for your ' + rec.device));
+    body.appendChild(el('h3', null, rec.title));
+    body.appendChild(el('p', { class: 'blurb' }, rec.blurb));
+
+    if (rec.command) {
+      var cmd = rec.command.split('{BASE}').join(base);
+      var row = el('div', { class: 'url-row cmd' });
+      row.appendChild(el('code', { class: 'url' }, cmd));
+      var c = copyBtn(cmd, 'Copy command'); c.className = 'btn btn-primary btn-small'; row.appendChild(c);
+      body.appendChild(row);
+    }
+    var actions = el('div', { class: 'rec-actions' });
+    if (rec.download) {
+      actions.appendChild(el('a', { class: 'btn btn-primary', href: rec.download.href.split('{BASE}').join(base), download: '' }, rec.download.label));
+    }
+    if (rec.link) {
+      actions.appendChild(el('a', { class: 'btn btn-primary', href: rec.link.href, target: '_blank', rel: 'noopener' }, rec.link.label));
+    }
+    if (rec.copy && lists.length) {
+      var cl = el('button', { class: 'btn btn-secondary', type: 'button' }, 'Copy list link');
+      cl.addEventListener('click', function () { copyText(urlOf(lists[0]), cl); });
+      actions.appendChild(cl);
+    }
+    var steps = el('button', { class: 'linkish', type: 'button' }, 'Step-by-step guide ›');
+    steps.addEventListener('click', function () { openGuide(rec.guide); });
+    actions.appendChild(steps);
+    body.appendChild(actions);
+    if (rec.fine) body.appendChild(el('p', { class: 'fine' }, rec.fine));
+    box.appendChild(body);
+    box.hidden = false;
+    document.getElementById('pick-label').hidden = false;
+    document.querySelector('#setup .sec-hd p').textContent = 'Here’s the quickest way to set up your ' + rec.device + '. Setting up something else? Choose it below.';
+  }
+
   // Build dropdown, grouped by kind
   var groups = {};
   BLOCKERS.forEach(function (b) {
@@ -752,7 +882,7 @@ var BLOCKERS = [
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (data) { lists = data.lists || []; })
     .catch(function () { document.getElementById('list-summary').textContent = 'Could not load lists.json. If previewing locally, run scripts/build_manifest.py first.'; })
-    .then(function () { renderLists(); fromHash(); if (select.value) showGuide(select.value); });
+    .then(function () { renderLists(); renderRec(); fromHash(); if (select.value) showGuide(select.value); });
   window.addEventListener('hashchange', fromHash);
 })();
 </script>
