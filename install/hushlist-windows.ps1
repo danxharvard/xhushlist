@@ -5,7 +5,6 @@ param([switch]$Uninstall, [switch]$Update)
 
 $ErrorActionPreference = 'Stop'
 $ListUrl   = '__SITE_URL__lists/hushlist.txt'
-$ScriptUrl = '__SITE_URL__install/hushlist-windows.ps1'
 $Hosts     = "$env:SystemRoot\System32\drivers\etc\hosts"
 $AppDir    = "$env:ProgramData\Hushlist"
 $TaskName  = 'Hushlist hourly update'
