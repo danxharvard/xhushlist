@@ -45,7 +45,7 @@ def load_sources() -> list[dict]:
         })
     return out
 
-DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}$")
+DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]{0,62}$")
 
 
 def to_domain(line: str) -> str | None:
@@ -98,8 +98,8 @@ def sync(up: dict) -> None:
     ]
     out = LISTS_DIR / f"{up['name']}.txt"
     LISTS_DIR.mkdir(exist_ok=True)
-    with out.open("w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(header) + "\n".join("0.0.0.0 " + d for d in domains) + "\n")
+    with out.open("w", encoding="utf-8", newline="\\n") as f:
+        f.write("\\n".join(header) + "\\n".join("0.0.0.0 " + d for d in domains) + "\\n")
     print(f"  {out.relative_to(ROOT)}: {len(domains):,} domains")
 
 
@@ -113,6 +113,8 @@ def main() -> int:
             failed.append(up["name"])
     if failed:
         print(f"Failed: {', '.join(failed)}", file=sys.stderr)
+        # Let GitHub Actions fail the job so a partial/stale build is not deployed.
+        return 1
     return 0
 
 
