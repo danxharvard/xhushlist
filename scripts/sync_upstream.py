@@ -45,7 +45,7 @@ def load_sources() -> list[dict]:
         })
     return out
 
-DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}$")
+DOMAIN = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
 def to_domain(line: str) -> str | None:
@@ -113,6 +113,8 @@ def main() -> int:
             failed.append(up["name"])
     if failed:
         print(f"Failed: {', '.join(failed)}", file=sys.stderr)
+        # Let GitHub Actions fail the job so a partial/stale build is not deployed.
+        return 1
     return 0
 
 
