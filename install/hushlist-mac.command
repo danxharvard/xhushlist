@@ -12,10 +12,20 @@
 # Don't edit this file by hand on GitHub: publish changes with scripts/release.py,
 # which sets the version and signs it. Unsigned changes are rejected by every device.
 
-HUSHLIST_VERSION=1
+HUSHLIST_VERSION=2
 
 # BEGIN SIGNING KEY (written by scripts/release.py keygen)
-PUBKEY=''
+PUBKEY='-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAqzSpzSgrdFTXKGeywDta
+D8xLoMj78Q2moYu2y0zef0jiBNdm8iZNHQDxf0H56zu96bCBLpm9LxRIrpqlX26h
+B9Aby1l5SmY3Tq9mlYZegC4rOSaT7nUxueZU+AMbZTyGJkaaTWaAlHYV8GNHRVho
+i5lYWcVt4ln4+K/aVwN+Q8jwRS5r6aqo+jVRgIm9ZuGBZWD6hQeH6HvhRkYWUdNa
+8IdWm+nnjOMTCVF23jbTJ1usrGiL0Y31Ekp07vPh+9C2AL2f1Eya/WWKE5i0fMrt
+TFougeBL644Oc29xMYqMunFqbF+w/oeao4Jl2rNb8bJ9lPhPhbe4Dp7R2It206+W
+SCUBRJHW5RvDaV2qr48+sAkv8GW7Gmie/AomcvCOUSYiVyEg+cHxVU8RTByBKQW9
+zrMh1LBz7yZzNgTvuEELBBVZsoYt0drkjrOI3c+iedIA6SdZhgLfoFEF6bJqWoMj
+nymEM2vBEzOmcT1BSW5KlD5xjKRoqSN6yWcflm8WHUCNAgMBAAE=
+-----END PUBLIC KEY-----'
 # END SIGNING KEY
 
 SITE="https://hushlist.online/"
