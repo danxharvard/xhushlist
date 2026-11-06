@@ -1,0 +1,2 @@
+# Installers are signed byte-for-byte: never convert their line endings
+install/* -text

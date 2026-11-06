@@ -422,17 +422,17 @@ var BLOCKERS = [
   { id: 'windows', name: 'Windows (one-click installer)', kind: 'This device', steps: [
       'Download <a href="{BASE}install/hushlist-windows.cmd" download><b>hushlist-windows.cmd</b></a>.',
       'Double-click it. If Windows shows "Windows protected your PC", click <b>More info → Run anyway</b>, then <b>Yes</b> when asked for admin access.',
-      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run <code>hushlist-windows.cmd uninstall</code> from a Command Prompt.'
+      'Wait for <b>Done</b>. That\'s it: Hushlist now keeps itself and the list up to date, checking every hour. To remove it, run <code>hushlist-windows.cmd uninstall</code> from a Command Prompt.'
     ],
-    note: 'This adds the list to your Windows hosts file (keeping a backup) and creates a hidden scheduled task called <b>Hushlist hourly update</b>. Very large hosts files can make the first web page of a session load a bit slower. If you notice that, a DNS blocker such as AdGuard Home works better.' },
+    note: 'This adds the list to your Windows hosts file (keeping a backup) and creates a hidden scheduled task called <b>Hushlist hourly update</b>. App updates are only installed if they carry the Hushlist signature. Very large hosts files can make the first web page of a session load a bit slower. If you notice that, a DNS blocker such as AdGuard Home works better.' },
   { id: 'mac', name: 'Mac (one-line installer)', kind: 'This device', steps: [
       'Open <b>Terminal</b> (press <b>Cmd + Space</b>, type Terminal, press Return).',
       'Paste this line and press Return, then enter your Mac password when asked:',
-      'Wait for <b>Done</b>. That\'s it: Hushlist now checks for list updates every hour by itself. To remove it, run the same line with <code>-s -- --uninstall</code> added after <code>bash</code>.'
+      'Wait for <b>Done</b>. That\'s it: Hushlist now keeps itself and the list up to date, checking every hour. To remove it, run the same line with <code>-s -- --uninstall</code> added after <code>bash</code>.'
     ],
     snippet: 'curl -fsSL {BASE}install/hushlist-mac.command | bash',
     snippetAfter: 1,
-    note: 'This adds the list to <code>/etc/hosts</code> (backup at <code>/etc/hosts.hushlist-backup</code>) and installs a small background job that refreshes it hourly. You can also <a href="{BASE}install/hushlist-mac.command" download>download the script</a> to read it first.' },
+    note: 'This adds the list to <code>/etc/hosts</code> (backup at <code>/etc/hosts.hushlist-backup</code>) and installs a small background job that refreshes it hourly. App updates are only installed if they carry the Hushlist signature. You can also <a href="{BASE}install/hushlist-mac.command" download>download the script</a> to read it first.' },
   { id: 'iphone', name: 'iPhone / iPad', kind: 'This device', steps: [
       'iPhones don\'t allow blocklist files to be installed directly, so you need an app that does the blocking.',
       'Install <b>AdGuard</b> from the App Store and open <b>Protection → Safari protection → Filters → Custom</b>.',

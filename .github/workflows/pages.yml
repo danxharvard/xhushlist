@@ -34,6 +34,9 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
 
+      - name: Check the installers are signed
+        run: python scripts/release.py verify
+
       - name: Sync upstream lists (sources.ini)
         run: python scripts/sync_upstream.py
 
@@ -47,8 +50,6 @@ jobs:
           mkdir _site
           cp index.html lists.json manifest.webmanifest icon-*.png _site/
           cp -r lists install _site/
-          # Point the installers at this site's address
-          sed -i "s|__SITE_URL__|${SITE_URL}|g" _site/install/*
           touch _site/.nojekyll
           # Fingerprint of the content (ignoring timestamps) to detect real changes
           (cd _site && find lists install index.html -type f | sort | xargs cat \
