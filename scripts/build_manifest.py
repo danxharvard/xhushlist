@@ -12,6 +12,7 @@ Entries are counted as non-empty lines that aren't comments (# or !).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -72,6 +73,11 @@ def main() -> int:
     files = sorted(p for p in LISTS_DIR.iterdir()
                    if p.is_file() and p.suffix.lower() in EXTENSIONS)
     lists = [describe(p) for p in files]
+    # A tiny checksum file next to each list lets installed copies skip the download
+    # when nothing changed, and check the download arrived intact.
+    for p in files:
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        p.with_name(p.name + ".sha256").write_text(digest + "\n", encoding="utf-8")
     manifest = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "lists": lists,

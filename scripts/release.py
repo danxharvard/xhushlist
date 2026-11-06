@@ -6,21 +6,27 @@ install it if it is signed with your private key. This script is the only way
 to make a valid release.
 
     python3 scripts/release.py keygen
-        One time. Creates your private signing key at ~/.hushlist/signing-key.pem
-        and writes the matching public key into both installers.
+        One time. Creates your private signing key at ~/.hushlist/signing-key.pem,
+        protected by a passphrase you choose, and writes the matching public key
+        into both installers.
         BACK UP THAT FILE (for example to a password manager). If you lose it,
         installed copies can't receive updates until people reinstall.
         Never commit it or share it.
 
+    python3 scripts/release.py protect-key
+        Adds a passphrase to a key created without one.
+
     python3 scripts/release.py publish "What changed"
-        Pulls the latest code, bumps the version in both installers, signs them,
-        adds a CHANGELOG entry, then commits and pushes. Devices pick it up within
-        about an hour of the site deploying.
+        Pulls the latest code and shows you every installer change since the last
+        release, with who made it. Only after you type "yes" does it bump the
+        version, sign both installers, add a CHANGELOG entry, commit and push.
+        Devices pick it up within about an hour of the site deploying.
         Add --no-push to stop before committing.
 
     python3 scripts/release.py verify
-        Checks the published files are correctly signed. The site build runs this
-        and refuses to deploy installers that aren't signed.
+        Checks both installers are correctly signed, pass a syntax check and pass
+        their own self-test. The site build runs this and refuses to deploy
+        installers that fail. (The Windows checks need PowerShell, which the build has.)
 
 Uses only the system openssl, so it runs on a stock Mac and on GitHub Actions.
 """
@@ -28,7 +34,9 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import getpass
 import os
+import shutil
 import pathlib
 import re
 import subprocess
@@ -51,6 +59,23 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
+PASS_ENV = "HUSHLIST_KEY_PASSPHRASE"
+
+
+def key_is_encrypted() -> bool:
+    return KEY.exists() and "ENCRYPTED" in KEY.read_text(errors="replace")
+
+
+def unlock_key() -> None:
+    """Ask for the key's passphrase once and hand it to openssl through the environment."""
+    if key_is_encrypted() and not os.environ.get(PASS_ENV):
+        os.environ[PASS_ENV] = getpass.getpass(f"Passphrase for {KEY}: ")
+
+
+def passin() -> list[str]:
+    return ["-passin", f"env:{PASS_ENV}"] if key_is_encrypted() else []
+
+
 def openssl(*args: str, data: bytes | None = None) -> bytes:
     r = subprocess.run(["openssl", *args], input=data, capture_output=True)
     if r.returncode != 0:
@@ -70,7 +95,7 @@ def git(*args: str) -> str:
 def public_pem_from_key() -> str:
     if not KEY.exists():
         fail(f"no signing key at {KEY}. Run: python3 scripts/release.py keygen")
-    return openssl("rsa", "-in", str(KEY), "-pubout").decode().strip()
+    return openssl("rsa", "-in", str(KEY), *passin(), "-pubout").decode().strip()
 
 
 def modulus_from_pem(pem: str) -> bytes:
@@ -112,22 +137,56 @@ def keygen() -> None:
         fail(f"{KEY} already exists. Delete it yourself first if you really mean to replace it:\n"
              "       installed copies only trust the old key, so they'd stop updating until people reinstall.")
     KEY.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    phrase = new_passphrase()
     old = os.umask(0o077)
     try:
-        openssl("genrsa", "-out", str(KEY), "3072")
+        os.environ[PASS_ENV] = phrase
+        openssl("genrsa", "-aes256", "-passout", f"env:{PASS_ENV}", "-out", str(KEY), "3072")
     finally:
         os.umask(old)
     os.chmod(KEY, 0o600)
     write_public_key(public_pem_from_key())
     print(f"Created your signing key: {KEY}")
-    print("Back it up somewhere safe (a password manager is ideal). Never commit or share it.")
+    print("Back up the key file AND its passphrase (a password manager is ideal). Never commit or share either.")
     print("The public key is now in both installers. Next: python3 scripts/release.py publish \"What changed\"")
+
+
+def new_passphrase() -> str:
+    if os.environ.get(PASS_ENV):          # for scripted use and tests
+        return os.environ[PASS_ENV]
+    while True:
+        a = getpass.getpass("Choose a passphrase for your signing key (12+ characters): ")
+        if len(a) < 12:
+            print("Too short. Use at least 12 characters, for example four random words.")
+            continue
+        if a != getpass.getpass("Type it again: "):
+            print("Those didn't match. Try again.")
+            continue
+        return a
+
+
+def protect_key() -> None:
+    if not KEY.exists():
+        fail(f"no signing key at {KEY}")
+    if key_is_encrypted():
+        print("Your signing key already has a passphrase.")
+        return
+    os.environ[PASS_ENV] = new_passphrase()
+    tmp = KEY.with_suffix(".tmp")
+    old = os.umask(0o077)
+    try:
+        openssl("rsa", "-aes256", "-in", str(KEY), "-passout", f"env:{PASS_ENV}", "-out", str(tmp))
+    finally:
+        os.umask(old)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, KEY)
+    print(f"Done: {KEY} now needs your passphrase to sign releases. Back up the passphrase with the key.")
 
 
 # ---------- signing ----------
 
 def sign(path: pathlib.Path) -> None:
-    sig = openssl("dgst", "-sha256", "-sign", str(KEY), str(path))
+    sig = openssl("dgst", "-sha256", "-sign", str(KEY), *passin(), str(path))
     (path.parent / (path.name + ".sig")).write_text(base64.b64encode(sig).decode())
 
 
@@ -165,6 +224,8 @@ def verify() -> None:
     for p in (MAC, WIN):
         if not check_sig(p, pem):
             problems.append(f"{p.relative_to(ROOT)} is not signed, or was changed after signing")
+    if not problems:
+        problems += self_tests(mv)
     if problems:
         print("Installer check FAILED:", file=sys.stderr)
         for p in problems:
@@ -175,14 +236,71 @@ def verify() -> None:
     print(f"Installers OK: version {mv}, signed.")
 
 
+def self_tests(version: int) -> list[str]:
+    """Run each installer's syntax check and its own self-test, as devices do before updating."""
+    problems = []
+    r = subprocess.run(["bash", "-n", str(MAC)], capture_output=True, text=True)
+    if r.returncode != 0:
+        problems.append(f"Mac installer syntax error: {r.stderr.strip()}")
+    else:
+        r = subprocess.run(["bash", str(MAC), "--self-test"], capture_output=True, text=True)
+        if r.returncode != 0 or r.stdout.strip() != str(version):
+            problems.append("Mac installer failed its self-test")
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        print("Note: PowerShell isn't installed here, so the Windows self-test was skipped (the site build runs it).")
+        return problems
+    check = ("$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile("
+             f"'{WIN}', [ref]$null, [ref]$e); if ($e) {{ $e | ForEach-Object {{ $_.Message }}; exit 1 }}")
+    r = subprocess.run([pwsh, "-NoProfile", "-Command", check], capture_output=True, text=True)
+    if r.returncode != 0:
+        problems.append(f"Windows installer syntax error: {r.stdout.strip()}")
+    else:
+        r = subprocess.run([pwsh, "-NoProfile", "-File", str(WIN), "-SelfTest"], capture_output=True, text=True)
+        if r.returncode != 0 or r.stdout.strip() != str(version):
+            problems.append("Windows installer failed its self-test")
+    return problems
+
+
+def review(pem: str) -> None:
+    """Show every installer change since the last release and who made it; require a typed yes."""
+    paths = ["install/hushlist-mac.command", "install/hushlist-windows.ps1", "install/hushlist-windows.cmd"]
+    last = git("log", "-1", "--format=%H", "--", "install/hushlist-mac.command.sig").strip()
+    diff = git("diff", last, "--", *paths) if last else git("diff", "--", *paths)
+    if last:
+        authors = git("log", "--format=  %h %an <%ae>: %s", f"{last}..HEAD", "--", *paths).rstrip()
+    else:
+        authors = ""
+    # Ignore the version lines this script changes itself
+    meaningful = [l for l in diff.splitlines()
+                  if l[:1] in "+-" and not l.startswith(("+++", "---"))
+                  and not MAC_VERSION.match(l[1:]) and not WIN_VERSION.match(l[1:])]
+    if not meaningful:
+        print("No installer changes since the last release.")
+    else:
+        print("=" * 72)
+        print("Installer changes since the last release (this is what you're about to sign):")
+        print("=" * 72)
+        print(diff)
+        if authors:
+            print("Commits that made these changes:")
+            print(authors)
+        print("=" * 72)
+    answer = input("Sign and publish these changes to every installed device? Type yes to continue: ")
+    if answer.strip().lower() != "yes":
+        fail("cancelled, nothing was signed")
+
+
 def publish(notes: str, push: bool) -> None:
     if not notes.strip():
         fail('say what changed, e.g.: python3 scripts/release.py publish "Fix hosts file backup"')
+    unlock_key()
     pem = public_pem_from_key()
     if embedded_pem() != pem:
         fail("the public key in the installers doesn't match your signing key at " + str(KEY))
     if push:
         git("pull", "--rebase", "--autostash", "origin", "main")
+    review(pem)
 
     new = max(versions()) + 1
     MAC.write_text(MAC_VERSION.sub(f"HUSHLIST_VERSION={new}", MAC.read_text(), count=1))
@@ -198,7 +316,8 @@ def publish(notes: str, push: bool) -> None:
     CHANGELOG.write_text(head + entry + body)
 
     files = ["install/hushlist-mac.command", "install/hushlist-mac.command.sig",
-             "install/hushlist-windows.ps1", "install/hushlist-windows.ps1.sig", "CHANGELOG.md"]
+             "install/hushlist-windows.ps1", "install/hushlist-windows.ps1.sig",
+             "install/hushlist-windows.cmd", "CHANGELOG.md"]
     if not push:
         print(f"Version {new} signed. Not pushed: review, then commit {', '.join(files)}")
         return
@@ -218,11 +337,13 @@ def main() -> None:
         keygen()
     elif cmd == "verify":
         verify()
+    elif cmd == "protect-key":
+        protect_key()
     elif cmd == "publish":
         rest = [a for a in args[1:] if a != "--no-push"]
         publish(" ".join(rest), push="--no-push" not in args)
     else:
-        fail(f"unknown command {cmd!r}. Use keygen, publish or verify.")
+        fail(f"unknown command {cmd!r}. Use keygen, protect-key, publish or verify.")
 
 
 if __name__ == "__main__":

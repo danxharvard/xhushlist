@@ -1,3 +1,4 @@
 # Generated during the GitHub build; no need to commit
 lists.json
 .claude/
+lists/*.sha256

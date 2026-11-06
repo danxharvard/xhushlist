@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hushlist</title>
 <meta name="description" content="Free DNS blocklists with setup guides for Pi-hole, AdGuard Home, uBlock Origin and more.">
+<link rel="canonical" href="https://hushlist.online/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Hushlist">
+<meta property="og:title" content="Hushlist: quiet the noise">
+<meta property="og:description" content="A free DNS blocklist for ads, trackers, phishing and malware, with one-step setup for every device.">
+<meta property="og:url" content="https://hushlist.online/">
+<meta property="og:image" content="https://hushlist.online/icon-512.png">
+<meta name="twitter:card" content="summary">
 <meta name="theme-color" id="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -458,7 +466,7 @@ var BLOCKERS = [
     note: 'This adds the list to <code>/etc/hosts</code> (backup at <code>/etc/hosts.hushlist-backup</code>) and installs a small background job that refreshes it hourly. App updates are only installed if they carry the Hushlist signature. You can also <a href="{BASE}install/hushlist-mac.command" download>download the script</a> to read it first.' },
   { id: 'iphone', name: 'iPhone / iPad', kind: 'This device', steps: [
       'iPhones don\'t allow blocklist files to be installed directly, so you need an app that does the blocking.',
-      'Install <b>AdGuard</b> from the App Store and open <b>Protection → Safari protection → Filters → Custom</b>.',
+      'Install <a href="https://apps.apple.com/app/id1047223162"><b>AdGuard</b> from the App Store</a> and open <b>Protection → Safari protection → Filters → Custom</b>.',
       'Tap <b>Add a filter</b>, paste the address below and confirm. {URLS}'
     ],
     note: 'This blocks ads in Safari. To block across all apps, use AdGuard\'s DNS protection, or point your iPhone at a home DNS blocker (Pi-hole / AdGuard Home) set up with this list.' },
@@ -757,6 +765,40 @@ var BLOCKERS = [
     phone: '<svg viewBox="0 0 32 32"><rect x="9" y="3" width="14" height="26" rx="3"/><path d="M14 6.5h4"/></svg>',
     tablet: '<svg viewBox="0 0 32 32"><rect x="6" y="3" width="20" height="26" rx="2.5"/><path d="M15 25.5h2"/></svg>'
   };
+  // Apps we send people to. Phones open the store app first and fall back to the website.
+  var APPS = {
+    adguardIOS: { label: 'Get AdGuard on the App Store',
+      store: 'https://apps.apple.com/app/id1047223162', ios: 'itms-apps://apps.apple.com/app/id1047223162' },
+    personalDNSfilter: { label: 'Get it on Google Play',
+      store: 'https://play.google.com/store/apps/details?id=dnsfilter.android', android: 'dnsfilter.android',
+      web: 'https://www.zenz-solutions.de/personaldnsfilter-wp/' },
+    adguardChrome: { label: 'Add AdGuard to Chrome',
+      store: 'https://chromewebstore.google.com/detail/bgnkhhnnamicmpeenaelnjfhikgbkllg' }
+  };
+
+  // Open an app's page in the device's own store app. If the store can't be opened
+  // (for example an Android phone without Google Play), go to the website instead.
+  function openApp(app) {
+    var fallback = app.web || app.store, target = '';
+    if (app.ios && (deviceId === 'iphone' || deviceId === 'ipad')) {
+      target = app.ios;                       // App Store app
+      fallback = app.store;                   // apps.apple.com also opens the App Store on iOS
+    } else if (app.android && deviceId === 'android') {
+      target = 'intent://details?id=' + app.android + '#Intent;scheme=market;package=com.android.vending;' +
+               'S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+    }
+    if (!target) { window.open(app.store, '_blank', 'noopener'); return; }
+    var left = false;
+    function gone() { if (document.visibilityState === 'hidden') left = true; }
+    document.addEventListener('visibilitychange', gone);
+    window.addEventListener('pagehide', function () { left = true; }, { once: true });
+    location.href = target;
+    setTimeout(function () {
+      document.removeEventListener('visibilitychange', gone);
+      if (!left && document.visibilityState === 'visible') location.href = fallback;
+    }, 1800);
+  }
+
   // EDIT ME: what each detected device is offered. "guide" is a BLOCKERS id.
   var RECOMMEND = {
     mac: { device: 'Mac', icon: 'laptop', guide: 'mac', title: 'Install Hushlist on your Mac',
@@ -769,19 +811,19 @@ var BLOCKERS = [
       fine: 'Open the downloaded file and allow it to make changes. If Windows shows a warning, choose More info, then Run anyway.' },
     iphone: { device: 'iPhone', icon: 'phone', guide: 'iphone', title: 'Block ads on your iPhone',
       blurb: 'iPhone doesn’t allow blocklists to be installed directly, so Hushlist works through the free AdGuard app.',
-      link: { href: 'https://adguard.com/en/adguard-ios/overview.html', label: 'Get AdGuard' }, copy: true,
+      app: APPS.adguardIOS, copy: true,
       fine: 'Then, in AdGuard, go to Protection → Safari protection → Filters → Custom and add your Hushlist link.' },
     ipad: { device: 'iPad', icon: 'tablet', guide: 'iphone', title: 'Block ads on your iPad',
       blurb: 'iPad doesn’t allow blocklists to be installed directly, so Hushlist works through the free AdGuard app.',
-      link: { href: 'https://adguard.com/en/adguard-ios/overview.html', label: 'Get AdGuard' }, copy: true,
+      app: APPS.adguardIOS, copy: true,
       fine: 'Then, in AdGuard, go to Protection → Safari protection → Filters → Custom and add your Hushlist link.' },
-    android: { device: 'Android device', icon: 'phone', guide: 'adaway', title: 'Block ads on Android',
-      blurb: 'Use AdAway, a free, open-source blocker that blocks in every app using your Hushlist link.',
-      link: { href: 'https://adaway.org/', label: 'Get AdAway' }, copy: true,
-      fine: 'In AdAway, tap Sources, then +, paste your Hushlist link and save.' },
+    android: { device: 'Android device', icon: 'phone', guide: 'dns66', title: 'Block ads on Android',
+      blurb: 'Use personalDNSfilter, a free, open-source blocker on Google Play that blocks in every app using your Hushlist link.',
+      app: APPS.personalDNSfilter, copy: true,
+      fine: 'In personalDNSfilter, open Advanced settings → Filter configuration, add a row with your Hushlist link and tick it.' },
     chromeos: { device: 'Chromebook', icon: 'laptop', guide: 'adguardext', title: 'Block ads on your Chromebook',
       blurb: 'Add Hushlist to the free AdGuard browser extension.',
-      link: { href: 'https://adguard.com/en/adguard-browser-extension/overview.html', label: 'Get AdGuard for Chrome' }, copy: true,
+      app: APPS.adguardChrome, copy: true,
       fine: 'Then open AdGuard’s Settings → Filters → Custom and add your Hushlist link.' },
     linux: { device: 'Linux computer', icon: 'desktop', guide: 'hosts', title: 'Use Hushlist on Linux',
       blurb: 'Add the list to your hosts file, or to a network blocker such as Pi-hole or AdGuard Home to cover every device at home.',
@@ -790,7 +832,7 @@ var BLOCKERS = [
 
   function detectDevice() {
     var forced = new URLSearchParams(location.search).get('device');   // for testing: ?device=windows
-    if (forced) return RECOMMEND[forced] ? forced : '';
+    if (forced) return Object.prototype.hasOwnProperty.call(RECOMMEND, forced) ? forced : '';
     var ua = navigator.userAgent || '';
     var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
     if (/iPhone|iPod/.test(ua)) return 'iphone';
@@ -803,13 +845,15 @@ var BLOCKERS = [
     return '';
   }
   var deviceId = detectDevice();
-  var rec = RECOMMEND[deviceId];
+  var rec = deviceId ? RECOMMEND[deviceId] : null;
 
   function openGuide(id) {
     select.value = id;
     history.replaceState(null, '', '#' + id);
     showGuide(id);
     guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var h = guide.querySelector('h3');           // take keyboard and screen-reader focus to the steps
+    if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
   }
 
   // Hero button names the device straight away
@@ -838,8 +882,10 @@ var BLOCKERS = [
     if (rec.download) {
       actions.appendChild(el('a', { class: 'btn btn-primary', href: rec.download.href.split('{BASE}').join(base), download: '' }, rec.download.label));
     }
-    if (rec.link) {
-      actions.appendChild(el('a', { class: 'btn btn-primary', href: rec.link.href, target: '_blank', rel: 'noopener' }, rec.link.label));
+    if (rec.app) {
+      var get = el('a', { class: 'btn btn-primary', href: rec.app.store, target: '_blank', rel: 'noopener' }, rec.app.label);
+      get.addEventListener('click', function (e) { e.preventDefault(); openApp(rec.app); });
+      actions.appendChild(get);
     }
     if (rec.copy && lists.length) {
       var cl = el('button', { class: 'btn btn-secondary', type: 'button' }, 'Copy list link');
