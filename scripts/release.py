@@ -62,6 +62,59 @@ def fail(msg: str) -> None:
 PASS_ENV = "HUSHLIST_KEY_PASSPHRASE"
 
 
+# ---------- prompts: the terminal if there is one, otherwise Mac pop-up windows ----------
+
+def use_dialogs() -> bool:
+    return not sys.stdin.isatty() and sys.platform == "darwin" and shutil.which("osascript") is not None
+
+
+def _osa(script: str, *args: str) -> str | None:
+    """Run AppleScript with arguments passed separately (never pasted into the script)."""
+    r = subprocess.run(["osascript", "-e", script, *args], capture_output=True, text=True)
+    return r.stdout.rstrip("\n") if r.returncode == 0 else None   # None = Cancel pressed
+
+
+def ask_secret(prompt: str) -> str:
+    if not use_dialogs():
+        return getpass.getpass(prompt)
+    got = _osa('on run argv\n'
+               '  activate\n'
+               '  return text returned of (display dialog (item 1 of argv) default answer "" '
+               'with hidden answer with title "Hushlist release" with icon caution '
+               'buttons {"Cancel", "OK"} default button "OK")\n'
+               'end run', prompt)
+    if got is None:
+        fail("cancelled")
+    return got
+
+
+def confirm(prompt: str, detail_file: pathlib.Path | None = None) -> bool:
+    if not use_dialogs():
+        return input(prompt + " Type yes to continue: ").strip().lower() == "yes"
+    if detail_file is not None:
+        subprocess.run(["open", "-e", str(detail_file)])    # show the changes in TextEdit
+    got = _osa('on run argv\n'
+               '  activate\n'
+               '  return button returned of (display dialog (item 1 of argv) with title "Hushlist release" '
+               'with icon caution buttons {"Cancel", "Sign and publish"} default button "Cancel")\n'
+               'end run', prompt)
+    return got == "Sign and publish"
+
+
+def notice(message: str) -> None:
+    print(message)
+    if use_dialogs():
+        _osa('on run argv\n  activate\n  display dialog (item 1 of argv) with title "Hushlist release" '
+             'buttons {"OK"} default button "OK"\nend run', message)
+
+
+def say_done(message: str) -> None:
+    print(message)
+    if use_dialogs():
+        _osa('on run argv\n  activate\n  display dialog (item 1 of argv) with title "Hushlist release" '
+             'buttons {"OK"} default button "OK"\nend run', message)
+
+
 def key_is_encrypted() -> bool:
     return KEY.exists() and "ENCRYPTED" in KEY.read_text(errors="replace")
 
@@ -69,7 +122,7 @@ def key_is_encrypted() -> bool:
 def unlock_key() -> None:
     """Ask for the key's passphrase once and hand it to openssl through the environment."""
     if key_is_encrypted() and not os.environ.get(PASS_ENV):
-        os.environ[PASS_ENV] = getpass.getpass(f"Passphrase for {KEY}: ")
+        os.environ[PASS_ENV] = ask_secret(f"Passphrase for your Hushlist signing key ({KEY}):")
 
 
 def passin() -> list[str]:
@@ -155,12 +208,12 @@ def new_passphrase() -> str:
     if os.environ.get(PASS_ENV):          # for scripted use and tests
         return os.environ[PASS_ENV]
     while True:
-        a = getpass.getpass("Choose a passphrase for your signing key (12+ characters): ")
+        a = ask_secret("Choose a passphrase for your signing key (12 or more characters, for example four random words):")
         if len(a) < 12:
-            print("Too short. Use at least 12 characters, for example four random words.")
+            notice("Too short. Use at least 12 characters, for example four random words.")
             continue
-        if a != getpass.getpass("Type it again: "):
-            print("Those didn't match. Try again.")
+        if a != ask_secret("Type the passphrase again:"):
+            notice("Those didn't match. Try again.")
             continue
         return a
 
@@ -180,7 +233,7 @@ def protect_key() -> None:
         os.umask(old)
     os.chmod(tmp, 0o600)
     os.replace(tmp, KEY)
-    print(f"Done: {KEY} now needs your passphrase to sign releases. Back up the passphrase with the key.")
+    say_done(f"Done. Your signing key now needs your passphrase to sign releases.\n\nBack up the passphrase together with the key file: {KEY}")
 
 
 # ---------- signing ----------
@@ -276,18 +329,19 @@ def review(pem: str) -> None:
                   if l[:1] in "+-" and not l.startswith(("+++", "---"))
                   and not MAC_VERSION.match(l[1:]) and not WIN_VERSION.match(l[1:])]
     if not meaningful:
-        print("No installer changes since the last release.")
+        report = "No installer changes since the last release.\n"
     else:
-        print("=" * 72)
-        print("Installer changes since the last release (this is what you're about to sign):")
-        print("=" * 72)
-        print(diff)
-        if authors:
-            print("Commits that made these changes:")
-            print(authors)
-        print("=" * 72)
-    answer = input("Sign and publish these changes to every installed device? Type yes to continue: ")
-    if answer.strip().lower() != "yes":
+        bar = "=" * 72
+        report = (f"{bar}\nInstaller changes since the last release (this is what you're about to sign):\n{bar}\n"
+                  f"{diff}\n" + (f"Commits that made these changes:\n{authors}\n" if authors else "") + bar + "\n")
+    print(report)
+    detail = None
+    if use_dialogs() and meaningful:
+        detail = pathlib.Path(tempfile.gettempdir(), "hushlist-release-changes.txt")
+        detail.write_text(report)
+    question = ("Sign and publish these changes to every installed device?"
+                + ("\n\nThe changes are open in TextEdit." if detail else ""))
+    if not confirm(question, detail):
         fail("cancelled, nothing was signed")
 
 
@@ -324,7 +378,7 @@ def publish(notes: str, push: bool) -> None:
     git("add", *files)
     git("commit", "-m", f"Release app version {new}\n\n{notes.strip()}")
     git("push", "origin", "main")
-    print(f"Released version {new}. Devices will install it within about an hour of the site deploying.")
+    say_done(f"Released version {new}. Devices will install it within about an hour of the site deploying.")
 
 
 def main() -> None:
