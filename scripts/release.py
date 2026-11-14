@@ -115,6 +115,43 @@ def say_done(message: str) -> None:
              'buttons {"OK"} default button "OK"\nend run', message)
 
 
+KEYCHAIN_SERVICE = "Hushlist signing key"
+KEYCHAIN_ACCOUNT = "hushlist"
+
+
+def keychain_save(secret: str) -> bool:
+    """Save the passphrase in the login Keychain (shows in the Passwords app). Sent over stdin, never argv."""
+    if sys.platform != "darwin" or not shutil.which("security"):
+        return False
+    esc = secret.replace("\\", "\\\\").replace('"', '\\"')
+    cmd = f'add-generic-password -U -a "{KEYCHAIN_ACCOUNT}" -s "{KEYCHAIN_SERVICE}" -l "{KEYCHAIN_SERVICE}" -w "{esc}"\n'
+    r = subprocess.run(["security", "-i"], input=cmd, capture_output=True, text=True)
+    return r.returncode == 0 and "error" not in (r.stdout + r.stderr).lower()
+
+
+def keychain_load() -> list[str]:
+    """Possible passphrases from the Keychain. macOS prints non-ASCII ones as hex, so offer both readings."""
+    if sys.platform != "darwin" or not shutil.which("security"):
+        return []
+    r = subprocess.run(["security", "find-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE, "-w"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return []
+    raw = r.stdout.rstrip("\n")
+    out = [raw]
+    if raw and len(raw) % 2 == 0 and re.fullmatch(r"[0-9a-f]+", raw):
+        try:
+            out.append(bytes.fromhex(raw).decode("utf-8"))
+        except ValueError:
+            pass
+    return out
+
+
+def passphrase_works() -> bool:
+    r = subprocess.run(["openssl", "rsa", "-in", str(KEY), "-passin", f"env:{PASS_ENV}", "-noout"], capture_output=True)
+    return r.returncode == 0
+
+
 def key_is_encrypted() -> bool:
     return KEY.exists() and "ENCRYPTED" in KEY.read_text(errors="replace")
 
@@ -123,11 +160,16 @@ def unlock_key() -> None:
     """Ask for the key's passphrase (up to three tries) and hand it to openssl through the environment."""
     if not key_is_encrypted() or os.environ.get(PASS_ENV):
         return
+    saved = keychain_load()          # macOS may ask you to allow access
+    for candidate in saved:
+        os.environ[PASS_ENV] = candidate
+        if passphrase_works():
+            return
     for attempt in range(3):
         os.environ[PASS_ENV] = ask_secret(f"Passphrase for your Hushlist signing key ({KEY}):")
-        r = subprocess.run(["openssl", "rsa", "-in", str(KEY), "-passin", f"env:{PASS_ENV}", "-noout"],
-                           capture_output=True)
-        if r.returncode == 0:
+        if passphrase_works():
+            if not saved and keychain_save(os.environ[PASS_ENV]):
+                print("Saved the passphrase in your Keychain (Passwords app) as \"Hushlist signing key\".")
             return
         if attempt < 2:
             notice("That passphrase isn't right. Try again.")
@@ -209,9 +251,12 @@ def keygen() -> None:
     finally:
         os.umask(old)
     os.chmod(KEY, 0o600)
+    saved = keychain_save(phrase)
     write_public_key(public_pem_from_key())
     print(f"Created your signing key: {KEY}")
-    print("Back up the key file AND its passphrase (a password manager is ideal). Never commit or share either.")
+    if saved:
+        print('Your passphrase is saved in your Keychain: open the Passwords app and search "Hushlist signing key".')
+    print("Back up the key file too (it's useless without the passphrase). Never commit or share either.")
     print("The public key is now in both installers. Next: python3 scripts/release.py publish \"What changed\"")
 
 
