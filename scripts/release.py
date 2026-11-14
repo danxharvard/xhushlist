@@ -120,9 +120,20 @@ def key_is_encrypted() -> bool:
 
 
 def unlock_key() -> None:
-    """Ask for the key's passphrase once and hand it to openssl through the environment."""
-    if key_is_encrypted() and not os.environ.get(PASS_ENV):
+    """Ask for the key's passphrase (up to three tries) and hand it to openssl through the environment."""
+    if not key_is_encrypted() or os.environ.get(PASS_ENV):
+        return
+    for attempt in range(3):
         os.environ[PASS_ENV] = ask_secret(f"Passphrase for your Hushlist signing key ({KEY}):")
+        r = subprocess.run(["openssl", "rsa", "-in", str(KEY), "-passin", f"env:{PASS_ENV}", "-noout"],
+                           capture_output=True)
+        if r.returncode == 0:
+            return
+        if attempt < 2:
+            notice("That passphrase isn't right. Try again.")
+    os.environ.pop(PASS_ENV, None)
+    notice("That passphrase isn't right. Nothing was signed.")
+    fail("wrong passphrase, nothing was signed")
 
 
 def passin() -> list[str]:
