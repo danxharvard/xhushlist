@@ -8,6 +8,7 @@
 # and installs a background job that runs every hour to:
 #   1. install a newer version of this script, but only if it is signed with the Hushlist key
 #   2. refresh the blocklist, downloading it only when it has changed
+# The published list is one domain per line; this script adds the 0.0.0.0 for the hosts file.
 #
 # Don't edit this file by hand on GitHub: publish changes with scripts/release.py,
 # which sets the version and signs it. Unsigned changes are rejected by every device.
@@ -43,6 +44,9 @@ STATE="$APP_DIR/list.sha256"
 LABEL="com.hushlist.update"
 BEGIN="# >>> Hushlist BEGIN (managed, do not edit) >>>"
 END="# <<< Hushlist END <<<"
+# Every download has a time limit, so a stalled connection can never hang the hourly job.
+CURL_OPTS=(--retry 3 --connect-timeout 20 --max-time 300)
+LOCK="$HOSTS.hushlist-lock"
 MIN_ENTRIES=1000
 MAX_ENTRIES=3000000
 # Never block these, whatever the list says: the update server and names the system relies on.
@@ -70,8 +74,8 @@ verify() {
 # Returns 0 if signed correctly, 1 if the download failed, 2 if the signature is wrong.
 fetch_signed() {
   $SUDO rm -f "$1" "$1.sig"
-  $SUDO curl -fsSL --retry 3 "$SCRIPT_URL?$(bust)" -o "$1" 2>/dev/null || return 1
-  $SUDO curl -fsSL --retry 3 "$SCRIPT_URL.sig?$(bust)" -o "$1.sig" 2>/dev/null || return 1
+  $SUDO curl -fsSL "${CURL_OPTS[@]}" "$SCRIPT_URL?$(bust)" -o "$1" 2>/dev/null || return 1
+  $SUDO curl -fsSL "${CURL_OPTS[@]}" "$SCRIPT_URL.sig?$(bust)" -o "$1.sig" 2>/dev/null || return 1
   verify "$1" "$1.sig" || return 2
 }
 
@@ -110,6 +114,34 @@ self_update() {
   HUSHLIST_JUST_UPDATED=1 exec /bin/bash "$APP_DIR/update.sh" --update
 }
 
+# Turn the downloaded list into hosts lines. Accepts plain domains or hosts lines, skips
+# comments, lowercases, drops anything that isn't a valid domain name, and removes duplicates.
+to_hosts_lines() {
+  tr -d '\r' < "$1" | awk '
+    /^[[:space:]]*($|#|!)/ { next }
+    {
+      if (NF >= 2 && ($1 == "0.0.0.0" || $1 == "127.0.0.1")) d = $2
+      else if (NF == 1) d = $1
+      else next
+      d = tolower(d)
+      if (length(d) > 253) next
+      if (d !~ /^[a-z0-9_]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9])?)+$/) next
+      if (seen[d]++) next
+      print "0.0.0.0 " d
+    }'
+}
+
+# One run at a time (the hourly job and a manual install could otherwise overlap).
+# A lock older than 30 minutes is left over from a crash and is cleared.
+take_lock() {
+  if $SUDO mkdir "$LOCK" 2>/dev/null; then return 0; fi
+  if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
+    $SUDO rm -rf "$LOCK"
+    $SUDO mkdir "$LOCK" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
 # Keep the background job's error log small.
 trim_log() {
   local f="$APP_DIR/update.log"
@@ -132,13 +164,17 @@ main() {
   say "Hushlist for Mac (version $HUSHLIST_VERSION)"
   if [ -n "$SUDO" ]; then echo "Your Mac password is needed to change system settings."; sudo -v; fi
 
+  if ! take_lock; then
+    say "Hushlist is already updating on this Mac. Try again in a minute."
+    exit 0
+  fi
   TMP=$(mktemp)
-  trap 'rm -f "$TMP" "$TMP.list"' EXIT
+  trap 'rm -f "$TMP" "$TMP.list" "$TMP.hosts"; $SUDO rm -f "$HOSTS.hushlist-new"; $SUDO rm -rf "$LOCK"' EXIT
 
   local want="" have=""
   if [ "$MODE" != "--uninstall" ]; then
     # The list's checksum is tiny: compare it first and skip the 6 MB download when nothing changed.
-    want=$(curl -fsS --retry 2 "$LIST_URL.sha256?$(bust)" 2>/dev/null | tr -cd '0-9a-f' | cut -c1-64 || true)
+    want=$(curl -fsS "${CURL_OPTS[@]}" "$LIST_URL.sha256?$(bust)" 2>/dev/null | tr -cd '0-9a-f' | cut -c1-64 || true)
     have=$(cat "$STATE" 2>/dev/null || true)
     if [ "$MODE" = "--update" ] && [ ${#want} -eq 64 ] && [ "$want" = "$have" ] && grep -qF "$BEGIN" "$HOSTS"; then
       exit 0
@@ -150,15 +186,16 @@ main() {
 
   if [ "$MODE" != "--uninstall" ]; then
     say "Downloading blocklist…"
-    curl -fsSL --retry 3 "$LIST_URL?$(bust)" -o "$TMP.list"
+    curl -fsSL "${CURL_OPTS[@]}" "$LIST_URL?$(bust)" -o "$TMP.list"
     if [ ${#want} -eq 64 ] && [ "$(shasum -a 256 "$TMP.list" | cut -c1-64)" != "$want" ]; then
       echo "The download didn't match its checksum (it may be mid-update). Nothing changed."; exit 1
     fi
-    COUNT=$(grep -c '^0\.0\.0\.0 ' "$TMP.list" || true)
+    to_hosts_lines "$TMP.list" > "$TMP.hosts"
+    COUNT=$(wc -l < "$TMP.hosts" | tr -d ' ')
     if [ "$COUNT" -lt "$MIN_ENTRIES" ] || [ "$COUNT" -gt "$MAX_ENTRIES" ]; then
       echo "Download looks wrong ($COUNT entries). Nothing changed."; exit 1
     fi
-    { echo "$BEGIN"; grep '^0\.0\.0\.0 ' "$TMP.list" | grep -Ev "$PROTECTED" || true; echo "$END"; } >> "$TMP"
+    { echo "$BEGIN"; grep -Ev "$PROTECTED" "$TMP.hosts" || true; echo "$END"; } >> "$TMP"
   fi
 
   # Only touch the hosts file when something changed

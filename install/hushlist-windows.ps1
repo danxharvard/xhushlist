@@ -3,6 +3,7 @@
 # and registers a scheduled task that runs every hour to:
 #   1. install a newer version of this script, but only if it is signed with the Hushlist key
 #   2. refresh the blocklist, downloading it only when it has changed
+# The published list is one domain per line; this script adds the 0.0.0.0 for the hosts file.
 #
 # Don't edit this file by hand on GitHub: publish changes with scripts/release.py,
 # which sets the version and signs it. Unsigned changes are rejected by every device.
@@ -68,6 +69,27 @@ if ($SelfTest) {
     $ok = Test-Signed ([IO.File]::ReadAllBytes($PSCommandPath)) ([IO.File]::ReadAllText("$PSCommandPath.sig"))
   } catch { $ok = $false }
   if ($ok) { Write-Output $HushlistVersion; exit 0 } else { exit 1 }
+}
+
+# Turn the downloaded list into hosts lines. Accepts plain domains or hosts lines, skips
+# comments, lowercases, drops anything that isn't a valid domain name, and removes duplicates.
+$DomainPattern = '^[a-z0-9_]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9])?)+$'
+function ConvertTo-HostsLines([string]$Text) {
+  $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+  $out  = New-Object 'System.Collections.Generic.List[string]'
+  $rx   = New-Object System.Text.RegularExpressions.Regex($DomainPattern, 'Compiled')
+  foreach ($raw in $Text.Split("`n")) {
+    $line = $raw.Trim()
+    if ($line.Length -eq 0 -or $line[0] -eq '#' -or $line[0] -eq '!') { continue }
+    $parts = $line.Split([char[]]@(' ', "`t"), [StringSplitOptions]::RemoveEmptyEntries)
+    if ($parts.Count -ge 2 -and ($parts[0] -eq '0.0.0.0' -or $parts[0] -eq '127.0.0.1')) { $d = $parts[1] }
+    elseif ($parts.Count -eq 1) { $d = $parts[0] }
+    else { continue }
+    $d = $d.ToLowerInvariant()
+    if ($d.Length -gt 253 -or -not $rx.IsMatch($d)) { continue }
+    if ($seen.Add($d)) { $out.Add('0.0.0.0 ' + $d) }
+  }
+  return ,$out
 }
 
 function Get-Sha256([byte[]]$Data) {
@@ -142,6 +164,11 @@ if ($Update) {
   Invoke-SelfUpdate
 }
 
+# One run at a time (the hourly task and a manual install could otherwise overlap).
+$mutex = New-Object System.Threading.Mutex($false, 'Global\HushlistUpdate')
+try { $haveLock = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $haveLock = $true }
+if (-not $haveLock) { Say 'Hushlist is already updating on this PC. Try again in a minute.'; exit 0 }
+
 Say "Hushlist for Windows (version $HushlistVersion)"
 $wc = New-Object Net.WebClient
 
@@ -173,10 +200,10 @@ if (-not $Uninstall) {
   $data = $wc.DownloadData($ListUrl + (Bust))
   if ($want -and (Get-Sha256 $data) -ne $want) { throw "The download didn't match its checksum (it may be mid-update). Nothing changed." }
   $text = [Text.Encoding]::UTF8.GetString($data)
-  $entries = @($text -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -like '0.0.0.0 *' })
+  $entries = ConvertTo-HostsLines $text
   $count = $entries.Count
   if ($count -lt $MinEntries -or $count -gt $MaxEntries) { throw "Download looks wrong ($count entries). Nothing changed." }
-  $entries = @($entries | Where-Object { $_ -notmatch $Protected })
+  $entries = @($entries.Where({ $_ -notmatch $Protected }))
   $keep.Add($Begin); $keep.AddRange([string[]]$entries); $keep.Add($End)
 }
 
@@ -186,7 +213,16 @@ if (($current -join "`n") -ne ($keep -join "`n")) {
   # Write a complete copy next to it, then swap it in, so a crash or power cut can
   # never leave a half-written hosts file.
   [IO.File]::WriteAllLines("$Hosts.hushlist-new", $keep, (New-Object Text.UTF8Encoding $false))
-  Move-Item "$Hosts.hushlist-new" $Hosts -Force
+  # Antivirus can hold the hosts file for a moment: retry a few times before giving up.
+  $moved = $false
+  for ($i = 1; $i -le 5 -and -not $moved; $i++) {
+    try { Move-Item "$Hosts.hushlist-new" $Hosts -Force; $moved = $true }
+    catch { Start-Sleep -Seconds 2 }
+  }
+  if (-not $moved) {
+    Remove-Item "$Hosts.hushlist-new" -Force -ErrorAction SilentlyContinue
+    throw 'The hosts file is in use by another program. Nothing changed; Hushlist will try again next hour.'
+  }
   ipconfig /flushdns | Out-Null
   if ($Update) { Log "List updated: $count domains." }
 }

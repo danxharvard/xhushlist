@@ -20,6 +20,7 @@
 <meta name="apple-mobile-web-app-title" content="Hushlist">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="format-detection" content="telephone=no">
+<link rel="preload" href="lists.json" as="fetch" crossorigin="anonymous">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1d1f'/%3E%3Cpath d='M8.5 13.5h3l4.5-4v13l-4.5-4h-3z' fill='%23fff'/%3E%3Cpath d='M20 13.5l5 5M25 13.5l-5 5' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -53,6 +54,7 @@
     --focus: rgba(0, 113, 227, 0.4);
     --mark-bg: #1d1d1f;
     --mark-fg: #ffffff;
+    --news-glow: rgba(29, 138, 58, 0.14);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -74,6 +76,7 @@
       --focus: rgba(41, 151, 255, 0.5);
       --mark-bg: #f5f5f7;
       --mark-fg: #000000;
+      --news-glow: rgba(48, 209, 88, 0.2);
     }
   }
   :root[data-theme="dark"] {
@@ -95,6 +98,7 @@
     --focus: rgba(41, 151, 255, 0.5);
     --mark-bg: #f5f5f7;
     --mark-fg: #000000;
+    --news-glow: rgba(48, 209, 88, 0.2);
   }
 
   /* ---------- Base ---------- */
@@ -139,6 +143,22 @@
 
   /* ---------- Hero ---------- */
   .hero { text-align: center; padding: 112px 0 96px; }
+  /* "New domains added" button: flashes twice when the page opens */
+  .news {
+    display: inline-flex; align-items: center; gap: 8px; margin: 0 0 22px; padding: 6px 14px 6px 12px;
+    border-radius: 980px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    font-size: 14px; font-weight: 500; letter-spacing: -0.01em; transition: border-color 0.2s ease;
+  }
+  .news:hover { text-decoration: none; border-color: var(--text-3); }
+  .news .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+  .news .more { color: var(--link); }
+  .news.flash { animation: news-flash 0.6s ease-in-out 2; }
+  @keyframes news-flash {
+    0%, 100% { background: var(--bg); border-color: var(--line); }
+    50% { background: var(--news-glow); border-color: var(--ok); }
+  }
+  @media (prefers-reduced-motion: reduce) { .news.flash { animation: none; } }
+
   .eyebrow { margin: 0 0 10px; color: var(--text-2); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
   .hero h1 { margin: 0; font-size: clamp(48px, 8.2vw, 80px); line-height: 1.05; font-weight: 700; letter-spacing: -0.045em; }
   .hero .lede { margin: 18px auto 0; max-width: 30em; color: var(--text-2); font-size: 21px; line-height: 1.38; letter-spacing: -0.02em; }
@@ -353,6 +373,7 @@
 <main id="top">
   <section class="hero">
     <div class="wrap">
+      <a class="news" id="news" href="#lists" hidden><span class="dot" aria-hidden="true"></span><span id="news-text"></span><span class="more" aria-hidden="true">›</span></a>
       <p class="eyebrow">Free DNS blocklist</p>
       <h1 id="headline">Quiet the noise.</h1>
       <p class="lede" id="tagline"></p>
@@ -550,10 +571,12 @@ var BLOCKERS = [
       'Paste a list address and click <b>Subscribe</b>. {URLS}'
     ] },
   { id: 'hosts', name: 'Hosts file (no blocker installed)', kind: 'Manual', steps: [
-      'Download a list using the <b>Download</b> buttons in the lists section below.',
-      'Add its lines to your hosts file: <code>/etc/hosts</code> on Mac and Linux, or <code>C:\\Windows\\System32\\drivers\\etc\\hosts</code> on Windows (edit as admin).'
+      'On a Mac or Windows PC, use the one-step installer instead (choose Mac or Windows above). It manages the hosts file and keeps it up to date for you.',
+      'On Linux, run this in a terminal. It adds the list to <code>/etc/hosts</code> between Hushlist markers, replacing any earlier copy:'
     ],
-    note: 'Hosts files don\'t update themselves, and plain domain lines (without <code>0.0.0.0</code> in front) won\'t work there. A real blocker is much easier.' },
+    snippet: 'sudo sh -c \'sed -i "/# >>> Hushlist BEGIN/,/# <<< Hushlist END/d" /etc/hosts && { echo "# >>> Hushlist BEGIN (managed, do not edit) >>>"; curl -fsSL {URLS_FIRST} | grep -v "^#" | grep . | sed "s/^/0.0.0.0 /"; echo "# <<< Hushlist END <<<"; } >> /etc/hosts\'',
+    snippetAfter: 1,
+    note: 'The list is published one domain per line, so the command adds the <code>0.0.0.0</code> each hosts-file line needs. Run it again to update. A DNS blocker such as Pi-hole or AdGuard Home covers every device at home instead.' },
   { id: 'other', name: 'My blocker isn\'t listed', kind: '', steps: [
       'Most blockers have a setting called something like <b>blocklists</b>, <b>filter lists</b>, <b>adlists</b> or <b>subscriptions</b>. Paste the list address there. {URLS}',
       'Still stuck? Use <b>Report a domain</b> in the menu to ask for a guide for your blocker.'
@@ -682,6 +705,7 @@ var BLOCKERS = [
     var urls = lists.map(urlOf);
     return s
       .split('{BASE}').join(base)
+      .replace('{URLS_FIRST}', urls[0] || '')
       .replace('{URLS_RAW}', urls.join('\n'))
       .replace('{URLS_YAML}', urls.map(function (u) { return '      - ' + u; }).join('\n'))
       .replace('{URLS_SH}', urls.map(function (u) { return '  "' + u + '" \\'; }).join('\n'));
@@ -742,6 +766,18 @@ var BLOCKERS = [
       card.appendChild(specs);
       wrap.appendChild(card);
     });
+
+    // "New domains added" button: shown for 14 days after a list gains domains
+    var recent = lists.filter(function (l) {
+      return l.added && l.added.count > 0 && (Date.now() - Date.parse(l.added.date)) < 14 * 864e5;
+    });
+    if (recent.length) {
+      var n = recent.reduce(function (s, l) { return s + l.added.count; }, 0);
+      var news = document.getElementById('news');
+      document.getElementById('news-text').textContent = fmtNum(n) + ' new domain' + (n === 1 ? '' : 's') + ' added';
+      news.hidden = false;
+      requestAnimationFrame(function () { news.classList.add('flash'); });
+    }
 
     // Hero: domain count and "Copy list link"
     if (lists.length) {
@@ -851,7 +887,8 @@ var BLOCKERS = [
     select.value = id;
     history.replaceState(null, '', '#' + id);
     showGuide(id);
-    guide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    guide.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
     var h = guide.querySelector('h3');           // take keyboard and screen-reader focus to the steps
     if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
   }
@@ -924,11 +961,12 @@ var BLOCKERS = [
     if (BLOCKERS.some(function (b) { return b.id === id; })) { select.value = id; showGuide(id); }
   }
 
-  fetch('lists.json', { cache: 'no-cache' })
+  fetch('lists.json')   // same request as the preload above, so it's reused rather than fetched twice
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (data) { lists = data.lists || []; })
     .catch(function () { document.getElementById('list-summary').textContent = 'Could not load lists.json. If previewing locally, run scripts/build_manifest.py first.'; })
     .then(function () { renderLists(); renderRec(); fromHash(); if (select.value) showGuide(select.value); });
+  renderRec();   // shown immediately, without waiting for lists.json
   window.addEventListener('hashchange', fromHash);
 })();
 </script>

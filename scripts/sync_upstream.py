@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download upstream blocklists and convert them to hosts format in lists/.
+"""Download upstream blocklists and convert them to one domain per line in lists/.
 
 Each [section] in sources.ini becomes lists/<name>.txt. Adblock-style
 rules (||example.com^) and plain domain lines are both understood; anything
@@ -93,13 +93,13 @@ def sync(up: dict) -> None:
     header += [
         f"# Converted: {now}",
         f"# Entries: {len(domains)}",
-        "# Note: hosts format blocks exact domains only, not their subdomains.",
+        "# Format: one domain per line. Works with DNS blockers, ad blockers and hosts-file tools.",
         "",
     ]
     out = LISTS_DIR / f"{up['name']}.txt"
     LISTS_DIR.mkdir(exist_ok=True)
     with out.open("w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(header) + "\n".join("0.0.0.0 " + d for d in domains) + "\n")
+        f.write("\n".join(header) + "\n".join(domains) + "\n")
     print(f"  {out.relative_to(ROOT)}: {len(domains):,} domains")
 
 
