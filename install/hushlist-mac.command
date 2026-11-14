@@ -15,7 +15,7 @@
 #
 # Everything runs from main() on the last line, so a download that is cut short runs nothing.
 
-HUSHLIST_VERSION=4
+HUSHLIST_VERSION=5
 
 # BEGIN SIGNING KEY (written by scripts/release.py keygen)
 PUBKEY='-----BEGIN PUBLIC KEY-----

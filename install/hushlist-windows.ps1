@@ -9,7 +9,7 @@
 # which sets the version and signs it. Unsigned changes are rejected by every device.
 param([switch]$Uninstall, [switch]$Update, [switch]$Version, [switch]$SelfTest)
 
-$HushlistVersion = 4
+$HushlistVersion = 5
 
 # BEGIN SIGNING KEY (written by scripts/release.py keygen)
 $KeyModulus  = 'ubfJxkBNrz9SkH30P9G2isgJCDb7j2MLB2v1b1lXbt6nt2rRZzJ/K7TgApUmrXfCCa3AAXNyHzcomVUFEdUlc0GH3GM4J7Onq88rjfHewv0zPtj/BHhhUivnt9AsvSauBVHDKVKh09a5zSEb06y95oOquu5Gxdq1CqlH3UPNKwxxw9aynecGJBJ8Sm6DJY9h2cuIcNu9BVAatm8ArdLqLi5QsVuL18V3pZTJcDzoQcsT8FwKDqZNqIeiV1h7hIeRz83CEDzBokNWB9LTkuIzdHsLx4sbHYh8tNx/R29bJtaxddE2V6ms5AGwwePoYIbF9jfyOHwXU1mQtaGdH876S4inWgOzH9vGZbFWwsZzrRu46ocg+Eouhzl1wsiXENYps6vviumnjrYR9WC0cCh4vtLJntL92Apbdpl9ux31VoioBG2SQwDhqkY5PKBAXDFH1hWubHLFsv5tCgMr4muPpW05YT/hQfQtLj3tMZiT6elWWANK3d+F7x5/Df55u5Mz'

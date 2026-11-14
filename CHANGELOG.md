@@ -2,6 +2,10 @@
 
 Installed copies update themselves within about an hour of a release.
 
+## Version 5 (2026-11-14)
+
+New look: the installer opens with HUSHLIST spelled in digits and shows animated progress while it installs.
+
 ## Version 4 (2026-11-14)
 
 New signing key (devices on version 3 need the installer run once more). Smaller list format (under 5 MB) with 8,310 new domains. Stability: download time limits, one run at a time, every list line validated, cleanup after failures, Windows retries when antivirus holds the hosts file, faster Windows processing.
