@@ -150,6 +150,88 @@ trim_log() {
   fi
 }
 
+# ---------- How the installer looks: banner and animated progress ----------
+# Only when someone is watching in a terminal; hourly runs and piped output stay plain.
+FANCY=0
+SPIN_PID=""
+SPIN_TITLE="Installing, please wait"
+setup_ui() {
+  if [ "$MODE" != "--update" ] && [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ] && [ -z "$HUSHLIST_PLAIN" ]; then FANCY=1; fi
+  if [ "$MODE" = "--uninstall" ]; then SPIN_TITLE="Removing, please wait"; fi
+}
+
+# Five-row letter shapes; every 1 becomes a random digit.
+glyph() {
+  case "$1$2" in
+    H0|H1|H3|H4|U0|U1|U2|U3) G="1   1" ;;
+    H2|L4|I0|I4|T0) G="11111" ;;
+    U4|S2) G=" 111 " ;;
+    S0) G=" 1111" ;;
+    S1|L0|L1|L2|L3) G="1    " ;;
+    S3) G="    1" ;;
+    S4) G="1111 " ;;
+    I1|I2|I3|T1|T2|T3|T4) G="  1  " ;;
+  esac
+}
+
+banner() {
+  if [ "$FANCY" != 1 ]; then say "Hushlist for Mac (version $HUSHLIST_VERSION)"; return; fi
+  local word="HUSHLIST" r i j f row line ch
+  local -a pattern colours
+  colours=(51 45 39 33 27)
+  for r in 0 1 2 3 4; do
+    row=""
+    for ((i = 0; i < ${#word}; i++)); do glyph "${word:i:1}" "$r"; row="$row$G  "; done
+    pattern[r]="$row"
+  done
+  printf '\n\033[?25l'
+  # Digits flicker a few times, then settle
+  for f in 1 2 3 4 5 6 7; do
+    for r in 0 1 2 3 4; do
+      line=""; row="${pattern[r]}"
+      for ((j = 0; j < ${#row}; j++)); do
+        ch="${row:j:1}"
+        if [ "$ch" = 1 ]; then line="$line$((RANDOM % 10))"; else line="$line "; fi
+      done
+      printf '  \033[1;38;5;%sm%s\033[0m\033[K\n' "${colours[r]}" "$line"
+    done
+    if [ $f -lt 7 ]; then sleep 0.06; printf '\033[5A'; fi
+  done
+  printf '  \033[38;5;244mQuiet the noise.  \xc2\xb7  Mac installer, version %s\033[0m\n\n\033[?25h' "$HUSHLIST_VERSION"
+}
+
+# A spinner, the title with a highlight sweeping across it, and the current step.
+spin_start() {
+  if [ "$FANCY" != 1 ]; then say "$1..."; return; fi
+  local step="$1"
+  printf '\033[?25l'
+  (
+    trap 'exit 0' TERM
+    frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    msg="$SPIN_TITLE"; n=${#msg}; i=0
+    while :; do
+      p=$(( i % (n + 10) ))
+      printf '\r\033[K  \033[38;5;45m%s\033[0m  \033[38;5;117m%s\033[1;97m%s\033[0;38;5;117m%s\033[0m   \033[38;5;244m%s\033[0m' \
+        "${frames[i % 10]}" "${msg:0:p}" "${msg:p:1}" "${msg:p+1}" "$step"
+      i=$((i + 1)); sleep 0.07
+    done
+  ) &
+  SPIN_PID=$!
+}
+spin_halt() {
+  if [ -n "$SPIN_PID" ]; then kill "$SPIN_PID" 2>/dev/null || true; wait "$SPIN_PID" 2>/dev/null || true; SPIN_PID=""; fi
+  if [ "$FANCY" = 1 ]; then printf '\r\033[K\033[?25h'; fi
+}
+spin_done() {   # $1 = what was done
+  spin_halt
+  if [ "$FANCY" = 1 ]; then printf '  \033[32m\xe2\x9c\x93\033[0m %s\n' "$1"; else say "$1"; fi
+}
+oops() {        # $1 = what went wrong
+  spin_halt
+  if [ "$FANCY" = 1 ]; then printf '  \033[31m\xe2\x9c\x97\033[0m %s\n' "$1"; else echo "$1"; fi
+}
+fmt_num() { local n="$1" out=""; while [ ${#n} -gt 3 ]; do out=",${n:${#n}-3}$out"; n="${n:0:${#n}-3}"; done; echo "$n$out"; }
+
 main() {
   case "$MODE" in
     --version) echo "$HUSHLIST_VERSION"; exit 0 ;;
@@ -161,23 +243,25 @@ main() {
 
   if [ "$MODE" = "--update" ]; then trim_log; self_update; fi
 
-  say "Hushlist for Mac (version $HUSHLIST_VERSION)"
-  if [ -n "$SUDO" ]; then echo "Your Mac password is needed to change system settings."; sudo -v; fi
+  setup_ui
+  banner
+  if [ -n "$SUDO" ]; then echo "  Your Mac password is needed to change system settings."; sudo -v; echo; fi
 
   if ! take_lock; then
-    say "Hushlist is already updating on this Mac. Try again in a minute."
+    oops "Hushlist is already updating on this Mac. Try again in a minute."
     exit 0
   fi
   TMP=$(mktemp)
-  trap 'rm -f "$TMP" "$TMP.list" "$TMP.hosts"; $SUDO rm -f "$HOSTS.hushlist-new"; $SUDO rm -rf "$LOCK"' EXIT
+  trap 'spin_halt; rm -f "$TMP" "$TMP.list" "$TMP.hosts"; $SUDO rm -f "$HOSTS.hushlist-new"; $SUDO rm -rf "$LOCK"' EXIT
 
   local want="" have=""
+  if [ "$MODE" = "--uninstall" ]; then spin_start "removing the blocklist"; else spin_start "downloading the blocklist"; fi
   if [ "$MODE" != "--uninstall" ]; then
     # The list's checksum is tiny: compare it first and skip the 6 MB download when nothing changed.
     want=$(curl -fsS "${CURL_OPTS[@]}" "$LIST_URL.sha256?$(bust)" 2>/dev/null | tr -cd '0-9a-f' | cut -c1-64 || true)
     have=$(cat "$STATE" 2>/dev/null || true)
     if [ "$MODE" = "--update" ] && [ ${#want} -eq 64 ] && [ "$want" = "$have" ] && grep -qF "$BEGIN" "$HOSTS"; then
-      exit 0
+      spin_halt; exit 0
     fi
   fi
 
@@ -185,16 +269,21 @@ main() {
   $SUDO awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$HOSTS" > "$TMP"
 
   if [ "$MODE" != "--uninstall" ]; then
-    say "Downloading blocklist…"
-    curl -fsSL "${CURL_OPTS[@]}" "$LIST_URL?$(bust)" -o "$TMP.list"
-    if [ ${#want} -eq 64 ] && [ "$(shasum -a 256 "$TMP.list" | cut -c1-64)" != "$want" ]; then
-      echo "The download didn't match its checksum (it may be mid-update). Nothing changed."; exit 1
+    if ! curl -fsSL "${CURL_OPTS[@]}" "$LIST_URL?$(bust)" -o "$TMP.list"; then
+      oops "Couldn't download the blocklist. Check your connection and try again."; exit 1
     fi
+    if [ ${#want} -eq 64 ] && [ "$(shasum -a 256 "$TMP.list" | cut -c1-64)" != "$want" ]; then
+      oops "The download didn't match its checksum (it may be mid-update). Nothing changed."; exit 1
+    fi
+    spin_done "Downloaded the latest blocklist ($(awk -v b="$(wc -c < "$TMP.list")" 'BEGIN { printf "%.1f", b / 1e6 }') MB)"
+    spin_start "checking every domain"
     to_hosts_lines "$TMP.list" > "$TMP.hosts"
     COUNT=$(wc -l < "$TMP.hosts" | tr -d ' ')
     if [ "$COUNT" -lt "$MIN_ENTRIES" ] || [ "$COUNT" -gt "$MAX_ENTRIES" ]; then
-      echo "Download looks wrong ($COUNT entries). Nothing changed."; exit 1
+      oops "Download looks wrong ($COUNT entries). Nothing changed."; exit 1
     fi
+    spin_done "Checked $(fmt_num "$COUNT") domains"
+    spin_start "updating your hosts file"
     { echo "$BEGIN"; grep -Ev "$PROTECTED" "$TMP.hosts" || true; echo "$END"; } >> "$TMP"
   fi
 
@@ -211,6 +300,8 @@ main() {
     $SUDO killall -HUP mDNSResponder 2>/dev/null || true
     if [ "$MODE" = "--update" ]; then log "List updated: $COUNT domains."; fi
   fi
+  if [ "$MODE" = "--uninstall" ]; then spin_done "Blocklist removed from your hosts file"
+  else spin_done "Hosts file updated (your own entries are untouched)"; fi
 
   case "$MODE" in
     --update)
@@ -222,21 +313,22 @@ main() {
         $SUDO rm -f "$PLIST"
       fi
       $SUDO rm -rf "$APP_DIR"
-      echo "Hushlist removed, including hourly updates."
-      echo "Backup of your previous hosts file: $HOSTS.hushlist-backup"
+      spin_done "Hourly updates switched off"
+      if [ "$FANCY" = 1 ]; then printf '\n  \033[1;38;5;45mHushlist removed.\033[0m\n'; else echo "Hushlist removed, including hourly updates."; fi
+      echo "  Backup of your previous hosts file: $HOSTS.hushlist-backup"
       exit 0 ;;
   esac
 
   # Install the hourly updater: a signed copy of this script, run by a root launchd job
-  say "Installing the hourly updater…"
+  spin_start "switching on hourly updates"
   $SUDO mkdir -p "$APP_DIR"
   local rc=0
   fetch_signed "$APP_DIR/update.new" || rc=$?
   if [ $rc -ne 0 ]; then
     $SUDO rm -f "$APP_DIR/update.new" "$APP_DIR/update.new.sig"
-    if [ $rc -eq 2 ]; then echo "The updater download isn't signed with the Hushlist key, so it wasn't installed."
-    else echo "Couldn't download the updater. Check your connection and try again."; fi
-    echo "Your blocklist is in place, but it won't update by itself until you run this installer again."
+    if [ $rc -eq 2 ]; then oops "The updater download isn't signed with the Hushlist key, so it wasn't installed."
+    else oops "Couldn't download the updater. Check your connection and try again."; fi
+    echo "  Your blocklist is in place, but it won't update by itself until you run this installer again."
     exit 1
   fi
   $SUDO chmod 755 "$APP_DIR/update.new"
@@ -269,8 +361,14 @@ PLIST
     $SUDO launchctl bootstrap system "$PLIST"
   fi
 
-  echo "Done. Blocking $COUNT domains. Hushlist checks for list and app updates every hour."
-  echo "Backup of your previous hosts file: $HOSTS.hushlist-backup"
+  spin_done "Hourly updates switched on"
+  if [ "$FANCY" = 1 ]; then
+    printf '\n  \033[1;38;5;45mDone.\033[0m Hushlist is blocking \033[1m%s\033[0m domains on this Mac.\n' "$(fmt_num "$COUNT")"
+    printf '  \033[38;5;244mIt checks for list and app updates every hour. Backup of your old hosts file:\n  %s\033[0m\n\n' "$HOSTS.hushlist-backup"
+  else
+    echo "Done. Blocking $COUNT domains. Hushlist checks for list and app updates every hour."
+    echo "Backup of your previous hosts file: $HOSTS.hushlist-backup"
+  fi
 }
 
 main "$@"

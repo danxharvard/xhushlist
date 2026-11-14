@@ -78,7 +78,9 @@ function ConvertTo-HostsLines([string]$Text) {
   $seen = New-Object 'System.Collections.Generic.HashSet[string]'
   $out  = New-Object 'System.Collections.Generic.List[string]'
   $rx   = New-Object System.Text.RegularExpressions.Regex($DomainPattern, 'Compiled')
+  $n = 0
   foreach ($raw in $Text.Split("`n")) {
+    if ((++$n % 12000) -eq 0) { Step-Frame }
     $line = $raw.Trim()
     if ($line.Length -eq 0 -or $line[0] -eq '#' -or $line[0] -eq '!') { continue }
     $parts = $line.Split([char[]]@(' ', "`t"), [StringSplitOptions]::RemoveEmptyEntries)
@@ -90,6 +92,101 @@ function ConvertTo-HostsLines([string]$Text) {
     if ($seen.Add($d)) { $out.Add('0.0.0.0 ' + $d) }
   }
   return ,$out
+}
+
+# ---------- How the installer looks: banner and animated progress ----------
+# Only when someone is watching in a console window; the hourly task stays silent.
+$Fancy = (-not $Update) -and ($Host.Name -eq 'ConsoleHost') -and (-not $env:HUSHLIST_PLAIN)
+try { if ([Console]::IsOutputRedirected) { $Fancy = $false } } catch { $Fancy = $false }
+$SpinTitle = if ($Uninstall) { 'Removing, please wait' } else { 'Installing, please wait' }
+$script:SpinStep = ''
+$script:SpinI = 0
+$script:Spinning = $false
+$Glyphs = @{
+  H = @('1   1', '1   1', '11111', '1   1', '1   1')
+  U = @('1   1', '1   1', '1   1', '1   1', ' 111 ')
+  S = @(' 1111', '1    ', ' 111 ', '    1', '1111 ')
+  L = @('1    ', '1    ', '1    ', '1    ', '11111')
+  I = @('11111', '  1  ', '  1  ', '  1  ', '11111')
+  T = @('11111', '  1  ', '  1  ', '  1  ', '  1  ')
+}
+
+function Show-Banner {
+  if (-not $Fancy) { Say "Hushlist for Windows (version $HushlistVersion)"; return }
+  $colours = 'Cyan', 'Cyan', 'DarkCyan', 'Blue', 'DarkBlue'
+  $rows = foreach ($r in 0..4) { (('HUSHLIST'.ToCharArray()) | ForEach-Object { $Glyphs[[string]$_][$r] + '  ' }) -join '' }
+  $rnd = New-Object Random
+  try {
+    [Console]::CursorVisible = $false
+    Write-Host ''
+    $top = [Console]::CursorTop
+    for ($f = 1; $f -le 7; $f++) {          # digits flicker a few times, then settle
+      [Console]::SetCursorPosition(0, $top)
+      for ($r = 0; $r -lt 5; $r++) {
+        $line = -join ($rows[$r].ToCharArray() | ForEach-Object { if ($_ -eq '1') { [char](48 + $rnd.Next(10)) } else { ' ' } })
+        Write-Host ('  ' + $line) -ForegroundColor $colours[$r]
+      }
+      if ($f -lt 7) { Start-Sleep -Milliseconds 60 }
+    }
+  } catch {}
+  Write-Host "  Quiet the noise.  -  Windows installer, version $HushlistVersion" -ForegroundColor DarkGray
+  Write-Host ''
+  try { [Console]::CursorVisible = $true } catch {}
+}
+
+function Clear-Line {
+  $w = 79
+  try { $w = [Console]::WindowWidth - 1 } catch {}
+  Write-Host ("`r" + (' ' * $w) + "`r") -NoNewline
+}
+
+# One frame: a spinner, the title with a highlight sweeping across it, and the current step.
+function Step-Frame {
+  if (-not $script:Spinning) { return }
+  $frames = '|', '/', '-', '\'
+  $msg = $SpinTitle
+  $i = $script:SpinI
+  $p = $i % ($msg.Length + 10)
+  Write-Host "`r  " -NoNewline
+  Write-Host $frames[$i % 4] -NoNewline -ForegroundColor Cyan
+  Write-Host '  ' -NoNewline
+  if ($p -lt $msg.Length) {
+    Write-Host $msg.Substring(0, $p) -NoNewline -ForegroundColor DarkCyan
+    Write-Host $msg[$p] -NoNewline -ForegroundColor White
+    Write-Host $msg.Substring($p + 1) -NoNewline -ForegroundColor DarkCyan
+  } else {
+    Write-Host $msg -NoNewline -ForegroundColor DarkCyan
+  }
+  Write-Host ('   ' + $script:SpinStep + '   ') -NoNewline -ForegroundColor DarkGray
+  $script:SpinI++
+}
+function Start-Spin([string]$Step) {
+  if (-not $Fancy) { Say "$Step..."; return }
+  try { [Console]::CursorVisible = $false } catch {}
+  $script:SpinStep = $Step; $script:Spinning = $true; Step-Frame
+}
+function Stop-Spin {
+  if ($Fancy -and $script:Spinning) { Clear-Line; try { [Console]::CursorVisible = $true } catch {} }
+  $script:Spinning = $false
+}
+function Complete-Spin([string]$Done) {
+  Stop-Spin
+  if ($Fancy) { Write-Host '  ' -NoNewline; Write-Host ([char]0x221A) -NoNewline -ForegroundColor Green; Write-Host " $Done" }
+  else { Say $Done }
+}
+function Stop-WithError([string]$Message) {
+  Stop-Spin
+  if ($Fancy) { Write-Host '  x ' -NoNewline -ForegroundColor Red; Write-Host $Message } else { Write-Host $Message }
+  Log $Message
+  exit 1
+}
+# Download while keeping the animation moving.
+function Get-Download([string]$Url) {
+  $client = New-Object Net.WebClient
+  $task = $client.DownloadDataTaskAsync($Url)
+  while (-not $task.IsCompleted) { Step-Frame; Start-Sleep -Milliseconds 70 }
+  if ($task.IsFaulted -or $task.IsCanceled) { return $null }
+  return ,$task.Result
 }
 
 function Get-Sha256([byte[]]$Data) {
@@ -169,8 +266,9 @@ $mutex = New-Object System.Threading.Mutex($false, 'Global\HushlistUpdate')
 try { $haveLock = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $haveLock = $true }
 if (-not $haveLock) { Say 'Hushlist is already updating on this PC. Try again in a minute.'; exit 0 }
 
-Say "Hushlist for Windows (version $HushlistVersion)"
+Show-Banner
 $wc = New-Object Net.WebClient
+if ($Uninstall) { Start-Spin 'removing the blocklist' } else { Start-Spin 'downloading the blocklist' }
 
 # The list's checksum is tiny: compare it first and skip the 6 MB download when nothing changed.
 $want = ''
@@ -180,7 +278,7 @@ if (-not $Uninstall) {
   if ($Update -and $want) {
     $have = ''
     try { $have = ([IO.File]::ReadAllText($StateFile)).Trim() } catch {}
-    if ($want -eq $have -and (Select-String -Path $Hosts -SimpleMatch $Begin -Quiet)) { exit 0 }
+    if ($want -eq $have -and (Select-String -Path $Hosts -SimpleMatch $Begin -Quiet)) { Stop-Spin; exit 0 }
   }
 }
 
@@ -196,13 +294,17 @@ foreach ($line in $current) {
 
 $count = 0
 if (-not $Uninstall) {
-  Say 'Downloading blocklist...'
-  $data = $wc.DownloadData($ListUrl + (Bust))
-  if ($want -and (Get-Sha256 $data) -ne $want) { throw "The download didn't match its checksum (it may be mid-update). Nothing changed." }
+  $data = Get-Download ($ListUrl + (Bust))
+  if ($null -eq $data) { Stop-WithError "Couldn't download the blocklist. Check your connection and try again." }
+  if ($want -and (Get-Sha256 $data) -ne $want) { Stop-WithError "The download didn't match its checksum (it may be mid-update). Nothing changed." }
+  Complete-Spin ('Downloaded the latest blocklist ({0:N1} MB)' -f ($data.Length / 1e6))
+  Start-Spin 'checking every domain'
   $text = [Text.Encoding]::UTF8.GetString($data)
   $entries = ConvertTo-HostsLines $text
   $count = $entries.Count
-  if ($count -lt $MinEntries -or $count -gt $MaxEntries) { throw "Download looks wrong ($count entries). Nothing changed." }
+  if ($count -lt $MinEntries -or $count -gt $MaxEntries) { Stop-WithError "Download looks wrong ($count entries). Nothing changed." }
+  Complete-Spin ('Checked {0:N0} domains' -f $count)
+  Start-Spin 'updating your hosts file'
   $entries = @($entries.Where({ $_ -notmatch $Protected }))
   $keep.Add($Begin); $keep.AddRange([string[]]$entries); $keep.Add($End)
 }
@@ -221,11 +323,13 @@ if (($current -join "`n") -ne ($keep -join "`n")) {
   }
   if (-not $moved) {
     Remove-Item "$Hosts.hushlist-new" -Force -ErrorAction SilentlyContinue
-    throw 'The hosts file is in use by another program. Nothing changed; Hushlist will try again next hour.'
+    Stop-WithError 'The hosts file is in use by another program. Nothing changed; Hushlist will try again next hour.'
   }
   ipconfig /flushdns | Out-Null
   if ($Update) { Log "List updated: $count domains." }
 }
+if ($Uninstall) { Complete-Spin 'Blocklist removed from your hosts file' }
+else { Complete-Spin 'Hosts file updated (your own entries are untouched)' }
 
 if ($Update) {
   if ($want) { [IO.File]::WriteAllText($StateFile, $want) }
@@ -235,18 +339,21 @@ if ($Update) {
 if ($Uninstall) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
   Remove-Item $AppDir -Recurse -Force -ErrorAction SilentlyContinue
-  Write-Host 'Hushlist removed, including hourly updates.'
-  Write-Host "Backup of your previous hosts file: $Hosts.hushlist-backup"
+  Complete-Spin 'Hourly updates switched off'
+  Write-Host ''
+  if ($Fancy) { Write-Host '  Hushlist removed.' -ForegroundColor Cyan } else { Write-Host 'Hushlist removed, including hourly updates.' }
+  Write-Host "  Backup of your previous hosts file: $Hosts.hushlist-backup"
   exit 0
 }
 
 # Install the hourly updater: a signed copy of this script, run by a SYSTEM task
-Say 'Installing the hourly updater...'
+Start-Spin 'switching on hourly updates'
 $r = Get-SignedScript
 if ($r.Status -ne 'ok') {
-  if ($r.Status -eq 'signature') { Write-Host "The updater download isn't signed with the Hushlist key, so it wasn't installed." }
-  else { Write-Host "Couldn't download the updater. Check your connection and try again." }
-  Write-Host "Your blocklist is in place, but it won't update by itself until you run this installer again."
+  Stop-Spin
+  if ($r.Status -eq 'signature') { Write-Host "  The updater download isn't signed with the Hushlist key, so it wasn't installed." -ForegroundColor Red }
+  else { Write-Host "  Couldn't download the updater. Check your connection and try again." -ForegroundColor Red }
+  Write-Host "  Your blocklist is in place, but it won't update by itself until you run this installer again."
   exit 1
 }
 Protect-AppDir
@@ -264,5 +371,15 @@ $system   = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccoun
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $hourly, $startup `
   -Settings $settings -Principal $system -Force | Out-Null
 
-Write-Host "Done. Blocking $count domains. Hushlist checks for list and app updates every hour."
-Write-Host "Backup of your previous hosts file: $Hosts.hushlist-backup"
+Complete-Spin 'Hourly updates switched on'
+if ($Fancy) {
+  Write-Host ''
+  Write-Host '  Done. ' -NoNewline -ForegroundColor Cyan
+  Write-Host ('Hushlist is blocking {0:N0} domains on this PC.' -f $count)
+  Write-Host '  It checks for list and app updates every hour. Backup of your old hosts file:' -ForegroundColor DarkGray
+  Write-Host "  $Hosts.hushlist-backup" -ForegroundColor DarkGray
+  Write-Host ''
+} else {
+  Write-Host "Done. Blocking $count domains. Hushlist checks for list and app updates every hour."
+  Write-Host "Backup of your previous hosts file: $Hosts.hushlist-backup"
+}
