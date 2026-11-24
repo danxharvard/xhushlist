@@ -163,6 +163,28 @@
   .hero h1 { margin: 0; font-size: clamp(48px, 8.2vw, 80px); line-height: 1.05; font-weight: 700; letter-spacing: -0.045em; }
   .hero .lede { margin: 18px auto 0; max-width: 30em; color: var(--text-2); font-size: 21px; line-height: 1.38; letter-spacing: -0.02em; }
   .actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 36px; }
+  /* Hush Browser banner */
+  .hush-banner { background: linear-gradient(90deg, #5b3fd6, #8a5cff); color: #fff; }
+  .hush-banner[hidden] { display: none; }
+  .hush-banner .wrap { display: flex; align-items: center; gap: 14px; padding-top: 10px; padding-bottom: 10px; }
+  .hush-moon { flex: none; width: 30px; height: 30px; }
+  .hush-moon rect { fill: rgba(255,255,255,0.18); }
+  .hush-moon path, .hush-moon circle { fill: #fff; }
+  .hush-banner p { margin: 0; flex: 1; font-size: 14px; line-height: 1.35; letter-spacing: -0.01em; }
+  .hush-banner p span { opacity: 0.88; }
+  .hush-actions { display: flex; gap: 8px; flex: none; }
+  .hb-btn { display: inline-block; padding: 7px 14px; border-radius: 980px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .hb-btn:hover { text-decoration: none; }
+  .hb-primary { background: #fff; color: #4a2fc4; }
+  .hb-primary:hover { background: #f0ecff; }
+  .hb-ghost { color: #fff; border: 1px solid rgba(255,255,255,0.55); }
+  .hb-ghost:hover { border-color: #fff; }
+  @media (max-width: 640px) {
+    .hush-banner .wrap { flex-wrap: wrap; }
+    .hush-banner p span { display: block; }
+    .hush-actions { width: 100%; }
+  }
+
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 22px;
     border-radius: 980px; border: 1px solid transparent; cursor: pointer; white-space: nowrap;
@@ -349,6 +371,23 @@
 </style>
 </head>
 <body>
+
+<!-- Hush Browser promo banner (hidden when the visitor is already using Hush Browser). -->
+<aside class="hush-banner" id="hush-banner" aria-label="Hush Browser">
+  <div class="wrap">
+    <svg class="hush-moon" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8"/>
+      <path d="M19.5 7.5a9 9 0 1 0 5 15.6A10 10 0 0 1 19.5 7.5z" stroke="none"/>
+      <circle cx="23.5" cy="9" r="1.1" stroke="none"/>
+    </svg>
+    <p><strong>Hush Browser</strong> <span>A light, blazing-fast browser for Mac that blocks ads before they load, with Hushlist built in.</span></p>
+    <div class="hush-actions">
+      <a class="hb-btn hb-primary" href="https://github.com/danxharvard/hushbrowser/releases/latest">Download for Mac</a>
+      <a class="hb-btn hb-ghost" href="https://github.com/danxharvard/hushbrowser">View website</a>
+    </div>
+  </div>
+</aside>
+<script>if (window.hushBrowser) document.getElementById('hush-banner').hidden = true;</script>
 
 <header class="nav">
   <div class="wrap">
