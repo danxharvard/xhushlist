@@ -894,10 +894,47 @@ var BLOCKERS = [
   }
 
   // Hero button names the device straight away
-  if (rec) document.getElementById('hero-cta').textContent = (rec.download || rec.command ? 'Install on your ' : 'Set up your ') + rec.device;
+  if (hush) document.getElementById('hero-cta').textContent = hush.hushlistConnected ? 'Connected to Hush Browser' : 'Connect to Hush Browser';
+  else if (rec) document.getElementById('hero-cta').textContent = (rec.download || rec.command ? 'Install on your ' : 'Set up your ') + rec.device;
+
+  // Visiting in Hush Browser? Hush tells this page (and only this one) it's there, so the
+  // quickest setup is one click: Hush asks the user before connecting anything.
+  var hush = window.hushBrowser || null;
+  function renderHush(box) {
+    box.innerHTML = '';
+    box.className = 'rec';
+    var icon = el('div', { class: 'dev', 'aria-hidden': 'true' }); icon.innerHTML = ICONS[(rec && rec.icon) || 'laptop'];
+    box.appendChild(icon);
+    var body = el('div');
+    body.appendChild(el('p', { class: 'kind' }, 'You’re using Hush Browser'));
+    if (hush.hushlistConnected) {
+      body.appendChild(el('h3', null, 'Hushlist is connected to Hush'));
+      body.appendChild(el('p', { class: 'blurb' }, 'Hush Guard is already blocking everything on the list, and keeps it up to date for you.'));
+    } else {
+      body.appendChild(el('h3', null, 'Connect Hushlist to Hush'));
+      body.appendChild(el('p', { class: 'blurb' }, 'One click and Hush Guard blocks every domain on the list too. Hush keeps it up to date for you.'));
+    }
+    var actions = el('div', { class: 'rec-actions' });
+    if (!hush.hushlistConnected) {
+      var connect = el('button', { class: 'btn btn-primary', type: 'button' }, 'Connect to Hush Browser');
+      connect.addEventListener('click', function () { hush.connectHushlist(); });
+      actions.appendChild(connect);
+    }
+    if (rec && rec.guide) {
+      var everywhere = el('button', { class: 'linkish', type: 'button' }, 'Block in every app on your ' + rec.device + ' too ›');
+      everywhere.addEventListener('click', function () { openGuide(rec.guide); });
+      actions.appendChild(everywhere);
+    }
+    body.appendChild(actions);
+    box.appendChild(body);
+    box.hidden = false;
+    document.getElementById('pick-label').hidden = false;
+    document.querySelector('#setup .sec-hd p').textContent = 'You’re in Hush Browser, so this is the quickest way. Setting up something else? Choose it below.';
+  }
 
   function renderRec() {
     var box = document.getElementById('rec');
+    if (hush) { renderHush(box); return; }
     if (!rec) return;
     box.innerHTML = '';
     box.className = 'rec';
