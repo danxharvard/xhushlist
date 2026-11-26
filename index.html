@@ -163,7 +163,7 @@
   .hero h1 { margin: 0; font-size: clamp(48px, 8.2vw, 80px); line-height: 1.05; font-weight: 700; letter-spacing: -0.045em; }
   .hero .lede { margin: 18px auto 0; max-width: 30em; color: var(--text-2); font-size: 21px; line-height: 1.38; letter-spacing: -0.02em; }
   .actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 36px; }
-  /* Hush Browser banner */
+  /* Ufoloi banner */
   .hush-banner { background: linear-gradient(90deg, #5b3fd6, #8a5cff); color: #fff; }
   .hush-banner[hidden] { display: none; }
   .hush-banner .wrap { display: flex; align-items: center; gap: 14px; padding-top: 10px; padding-bottom: 10px; }
@@ -372,15 +372,15 @@
 </head>
 <body>
 
-<!-- Hush Browser promo banner (hidden when the visitor is already using Hush Browser). -->
-<aside class="hush-banner" id="hush-banner" aria-label="Hush Browser">
+<!-- Ufoloi promo banner (hidden when the visitor is already using Ufoloi). -->
+<aside class="hush-banner" id="hush-banner" aria-label="Ufoloi">
   <div class="wrap">
     <svg class="hush-moon" viewBox="0 0 32 32" aria-hidden="true">
       <rect width="32" height="32" rx="8"/>
       <path d="M19.5 7.5a9 9 0 1 0 5 15.6A10 10 0 0 1 19.5 7.5z" stroke="none"/>
       <circle cx="23.5" cy="9" r="1.1" stroke="none"/>
     </svg>
-    <p><strong>Hush Browser</strong> <span>A light, blazing-fast browser for Mac that blocks ads before they load, with Hushlist built in.</span></p>
+    <p><strong>Ufoloi</strong> <span>A light, blazing-fast browser for Mac that blocks ads before they load, with Hushlist built in.</span></p>
     <div class="hush-actions">
       <a class="hb-btn hb-primary" href="https://github.com/danxharvard/hushbrowser/releases/latest">Download for Mac</a>
       <a class="hb-btn hb-ghost" href="https://github.com/danxharvard/hushbrowser">View website</a>
@@ -933,11 +933,11 @@ var BLOCKERS = [
   }
 
   // Hero button names the device straight away
-  if (hush) document.getElementById('hero-cta').textContent = hush.hushlistConnected ? 'Connected to Hush Browser' : 'Connect to Hush Browser';
+  if (hush) document.getElementById('hero-cta').textContent = hush.hushlistConnected ? 'Connected to Ufoloi' : 'Connect to Ufoloi';
   else if (rec) document.getElementById('hero-cta').textContent = (rec.download || rec.command ? 'Install on your ' : 'Set up your ') + rec.device;
 
-  // Visiting in Hush Browser? Hush tells this page (and only this one) it's there, so the
-  // quickest setup is one click: Hush asks the user before connecting anything.
+  // Visiting in Ufoloi? Ufoloi tells this page (and only this one) it's there, so the
+  // quickest setup is one click: Ufoloi asks the user before connecting anything.
   var hush = window.hushBrowser || null;
   function renderHush(box) {
     box.innerHTML = '';
@@ -945,17 +945,17 @@ var BLOCKERS = [
     var icon = el('div', { class: 'dev', 'aria-hidden': 'true' }); icon.innerHTML = ICONS[(rec && rec.icon) || 'laptop'];
     box.appendChild(icon);
     var body = el('div');
-    body.appendChild(el('p', { class: 'kind' }, 'You’re using Hush Browser'));
+    body.appendChild(el('p', { class: 'kind' }, 'You’re using Ufoloi'));
     if (hush.hushlistConnected) {
-      body.appendChild(el('h3', null, 'Hushlist is connected to Hush'));
-      body.appendChild(el('p', { class: 'blurb' }, 'Hush Guard is already blocking everything on the list, and keeps it up to date for you.'));
+      body.appendChild(el('h3', null, 'Hushlist is connected to Ufoloi'));
+      body.appendChild(el('p', { class: 'blurb' }, 'Ufoloi is already blocking everything on the list, and keeps it up to date for you.'));
     } else {
-      body.appendChild(el('h3', null, 'Connect Hushlist to Hush'));
-      body.appendChild(el('p', { class: 'blurb' }, 'One click and Hush Guard blocks every domain on the list too. Hush keeps it up to date for you.'));
+      body.appendChild(el('h3', null, 'Connect Hushlist to Ufoloi'));
+      body.appendChild(el('p', { class: 'blurb' }, 'One click and Ufoloi blocks every domain on the list too, and keeps it up to date for you.'));
     }
     var actions = el('div', { class: 'rec-actions' });
     if (!hush.hushlistConnected) {
-      var connect = el('button', { class: 'btn btn-primary', type: 'button' }, 'Connect to Hush Browser');
+      var connect = el('button', { class: 'btn btn-primary', type: 'button' }, 'Connect to Ufoloi');
       connect.addEventListener('click', function () { hush.connectHushlist(); });
       actions.appendChild(connect);
     }
@@ -968,7 +968,7 @@ var BLOCKERS = [
     box.appendChild(body);
     box.hidden = false;
     document.getElementById('pick-label').hidden = false;
-    document.querySelector('#setup .sec-hd p').textContent = 'You’re in Hush Browser, so this is the quickest way. Setting up something else? Choose it below.';
+    document.querySelector('#setup .sec-hd p').textContent = 'You’re in Ufoloi, so this is the quickest way. Setting up something else? Choose it below.';
   }
 
   function renderRec() {
